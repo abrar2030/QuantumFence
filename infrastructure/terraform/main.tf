@@ -1,4 +1,4 @@
-# QuantumFence — Terraform AWS Infrastructure
+# QuantumFence - Terraform AWS Infrastructure
 # Provisions EC2, RDS, ElastiCache, S3, and ECS resources
 
 terraform {

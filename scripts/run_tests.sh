@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# QuantumFence — Test Runner Script
+# QuantumFence - Test Runner Script
 # Usage:
 #   bash scripts/run_tests.sh              # full suite (all three modules)
 #   bash scripts/run_tests.sh backend      # backend tests only
@@ -32,13 +32,13 @@ cd "$QF_ROOT"
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║         QuantumFence — Test Suite Runner                 ║${NC}"
+echo -e "${CYAN}║         QuantumFence - Test Suite Runner                 ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Test locations:"
-echo -e "  ${CYAN}code/backend/tests/${NC}      — API, services, DB, settings"
-echo -e "  ${CYAN}code/ai_models/tests/${NC}    — DroneDetector, ModelManager"
-echo -e "  ${CYAN}code/integrations/tests/${NC} — Google Earth"
+echo -e "  ${CYAN}code/backend/tests/${NC}      - API, services, DB, settings"
+echo -e "  ${CYAN}code/ai_models/tests/${NC}    - DroneDetector, ModelManager"
+echo -e "  ${CYAN}code/integrations/tests/${NC} - Google Earth"
 echo ""
 
 case "$MODE" in

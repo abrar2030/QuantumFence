@@ -1,4 +1,4 @@
-# QuantumFence — Backend Dockerfile
+# QuantumFence - Backend Dockerfile
 # Multi-stage build for optimized production image
 
 # ─── Stage 1: Builder ────────────────────────────────────────────────────────

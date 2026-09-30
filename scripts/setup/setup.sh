@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# QuantumFence — Setup Script
+# QuantumFence - Setup Script
 # Automated installation for Ubuntu/Debian Linux
 # Usage: bash setup.sh [--dev|--prod|--docker]
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -31,7 +31,7 @@ cat << 'EOF'
              ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝╚══════╝
 EOF
 echo -e "${NC}"
-echo -e "${BOLD}  Quantum-Accelerated Perimeter Defense AI System — v1.0.0${NC}"
+echo -e "${BOLD}  Quantum-Accelerated Perimeter Defense AI System - v1.0.0${NC}"
 echo -e "${CYAN}  ──────────────────────────────────────────────────────────────${NC}"
 echo ""
 }

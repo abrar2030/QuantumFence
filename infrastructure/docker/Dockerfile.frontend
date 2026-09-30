@@ -1,4 +1,4 @@
-# QuantumFence — Frontend Dockerfile
+# QuantumFence - Frontend Dockerfile
 # Multi-stage: Node build → Nginx serve
 
 # ─── Stage 1: Build ──────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# QuantumFence — Test Dependencies
+# QuantumFence - Test Dependencies
 # Install with: pip install -r requirements-test.txt
 
 # Core test framework

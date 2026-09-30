@@ -1,4 +1,4 @@
--- QuantumFence — PostgreSQL Initialization Script
+-- QuantumFence - PostgreSQL Initialization Script
 -- Runs once when Postgres container first starts
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -21,4 +21,4 @@ BEGIN
     END IF;
 END $$;
 
-COMMENT ON DATABASE quantumfence IS 'QuantumFence — Perimeter Defense AI System Database';
+COMMENT ON DATABASE quantumfence IS 'QuantumFence - Perimeter Defense AI System Database';

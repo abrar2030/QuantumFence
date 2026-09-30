@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# QuantumFence — Start Script (Development Mode)
+# QuantumFence - Start Script (Development Mode)
 set -euo pipefail
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 QF_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -20,7 +20,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e "${CYAN}"
-echo "  ⚡ QUANTUMFENCE — Launching Systems..."
+echo "  ⚡ QUANTUMFENCE - Launching Systems..."
 echo -e "${NC}"
 
 # ── Backend ────────────────────────────────────────────────────────────────
