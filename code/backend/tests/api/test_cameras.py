@@ -1,16 +1,7 @@
-"""
-Tests for /api/cameras routes.
-Covers CRUD, enable/disable, snapshot serving, stats,
-and detection service integration via mocked app.state.
-"""
-
 import pytest
 from database.models import CameraStatus
 
 pytestmark = pytest.mark.api
-
-
-# ─── List cameras ─────────────────────────────────────────────────────────────
 
 
 class TestListCameras:
@@ -44,9 +35,6 @@ class TestListCameras:
         res = client.get("/api/cameras?is_active=true", headers=auth_headers)
         assert res.status_code == 200
         assert all(c["is_active"] for c in res.json())
-
-
-# ─── Create camera ────────────────────────────────────────────────────────────
 
 
 class TestCreateCamera:
@@ -90,9 +78,6 @@ class TestCreateCamera:
         assert data["night_vision"] is True
 
     def test_create_triggers_detection_service(self, client, auth_headers):
-        """Creating an active camera must call detection_service.start_camera."""
-        # Just verify the endpoint succeeds and the camera is created.
-        # start_camera is a background task (async) - we just confirm it's scheduled.
         res = client.post(
             "/api/cameras", json={"name": "DS Test Cam"}, headers=auth_headers
         )
@@ -102,9 +87,6 @@ class TestCreateCamera:
     def test_create_requires_auth(self, client):
         res = client.post("/api/cameras", json={"name": "X"})
         assert res.status_code == 401
-
-
-# ─── Get single camera ────────────────────────────────────────────────────────
 
 
 class TestGetCamera:
@@ -139,9 +121,6 @@ class TestGetCamera:
             "created_at",
         ]:
             assert field in data, f"Missing field: {field}"
-
-
-# ─── Update camera ────────────────────────────────────────────────────────────
 
 
 class TestUpdateCamera:
@@ -181,9 +160,6 @@ class TestUpdateCamera:
         assert data["night_vision"] is True
 
 
-# ─── Delete camera ────────────────────────────────────────────────────────────
-
-
 class TestDeleteCamera:
 
     def test_delete_existing_camera_returns_204(
@@ -206,9 +182,6 @@ class TestDeleteCamera:
         assert res.status_code == 404
 
 
-# ─── Enable / Disable ────────────────────────────────────────────────────────
-
-
 class TestEnableDisableCamera:
 
     def test_disable_camera(self, client, auth_headers, make_camera):
@@ -226,9 +199,6 @@ class TestEnableDisableCamera:
     def test_disable_nonexistent_returns_404(self, client, auth_headers):
         res = client.post("/api/cameras/99999/disable", headers=auth_headers)
         assert res.status_code == 404
-
-
-# ─── Stats ────────────────────────────────────────────────────────────────────
 
 
 class TestCameraStats:
@@ -261,9 +231,6 @@ class TestCameraStats:
         assert data["active_alerts"] == 2
 
 
-# ─── Snapshot endpoint ────────────────────────────────────────────────────────
-
-
 class TestCameraSnapshot:
 
     def test_snapshot_serves_file_when_present(
@@ -274,7 +241,6 @@ class TestCameraSnapshot:
         from config.settings import settings
 
         cam = make_camera()
-        # Write a real JPEG into the snapshots dir
         snap_dir = tmp_path / "snaps"
         snap_dir.mkdir()
         monkeypatch.setattr(settings, "SNAPSHOTS_DIR", str(snap_dir))

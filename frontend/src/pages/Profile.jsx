@@ -18,7 +18,7 @@ function Banner({ kind, children }) {
         color: ok ? "var(--qf-green)" : "var(--qf-red)",
       }}
     >
-      {ok ? "✓" : "⚠"} {children}
+      {ok ? "+" : "!"} {children}
     </div>
   );
 }

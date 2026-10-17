@@ -42,10 +42,9 @@ QuantumFence/
 │   │   │                         # (Claude API), and others
 │   │   ├── database/             # SQLAlchemy models, including user roles
 │   │   └── tests/                # Backend test suite (not currently run in CI)
-│   ├── ai_models/                # drone_detector, model_manager (YOLOv8 via
-│   │   │                         # Ultralytics/PyTorch, with an honest
-│   │   │                         # MockYOLOModel fallback if those packages
-│   │   │                         # aren't installed)
+│   ├── ai_models/                # Detection, tracking, threat analysis package
+│   │   │                         # (YOLOv8 detectors, Kalman tracker, pipeline,
+│   │   │                         # training and export tooling)
 │   │   └── tests/                # ai_models test suite
 │   └── integrations/             # Google Maps / Google Earth KML export
 ├── frontend/                     # React (Vite) web dashboard
@@ -59,16 +58,16 @@ QuantumFence/
 
 ### Application tier (wired and tested)
 
-| Component                   | Details                                                                                                                                                                                                                             |
-| :-------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **API**                     | FastAPI backend exposing `/api/auth`, `/api/cameras`, `/api/alerts`, `/api/drones`, `/api/geofences`, and `/api/analytics`.                                                                                                         |
-| **Auth**                    | JWT sessions with refresh tokens and three roles (Admin, Operator, Viewer), genuinely enforced via a database-backed role model. `SECRET_KEY` falls back to a static placeholder value with no check that rejects it in production. |
-| **Detection**               | Real YOLOv8 (Ultralytics, PyTorch, OpenCV) person, vehicle, and drone detection, lazily imported so a missing dependency degrades to an explicitly-named `MockYOLOModel` rather than crashing.                                      |
-| **Threat analysis**         | A genuine Anthropic API integration (`services/ai_analysis_service.py`) that calls Claude for natural-language threat summaries and risk scoring, not a placeholder.                                                                |
-| **Real-time events**        | A real WebSocket hub (`api/websocket.py`) pushing `alert`, `detection`, `drone_detection`, and `camera_status` events to connected clients.                                                                                         |
-| **Geofencing**              | Full CRUD for polygon and circle geofence zones.                                                                                                                                                                                    |
-| **Geospatial integrations** | Google Maps and KML export for Google Earth Pro, in `code/integrations`.                                                                                                                                                            |
-| **Web dashboard**           | React app (Vite) with React Router, Axios, Leaflet (mapping), and Recharts.                                                                                                                                                         |
+| Component                   | Details                                                                                                                                                                                                                                                                                                                              |
+| :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API**                     | FastAPI backend exposing `/api/auth`, `/api/cameras`, `/api/alerts`, `/api/drones`, `/api/geofences`, and `/api/analytics`.                                                                                                                                                                                                          |
+| **Auth**                    | JWT sessions with refresh tokens and three roles (Admin, Operator, Viewer), genuinely enforced via a database-backed role model. `SECRET_KEY` falls back to a static placeholder value with no check that rejects it in production.                                                                                                  |
+| **Detection**               | YOLOv8 (Ultralytics, PyTorch, OpenCV) person, vehicle, and drone detection behind a per-camera pipeline with Kalman tracking, threat scoring, swarm and loitering detection. If weights cannot be loaded the system reports `unavailable` instead of inventing detections; mock detections require `MODEL_ALLOW_MOCK_FALLBACK=true`. |
+| **Threat analysis**         | A genuine Anthropic API integration (`services/ai_analysis_service.py`) that calls Claude for natural-language threat summaries and risk scoring, not a placeholder.                                                                                                                                                                 |
+| **Real-time events**        | A real WebSocket hub (`api/websocket.py`) pushing `alert`, `detection`, `drone_detection`, and `camera_status` events to connected clients.                                                                                                                                                                                          |
+| **Geofencing**              | Full CRUD for polygon and circle geofence zones.                                                                                                                                                                                                                                                                                     |
+| **Geospatial integrations** | Google Maps and KML export for Google Earth Pro, in `code/integrations`.                                                                                                                                                                                                                                                             |
+| **Web dashboard**           | React app (Vite) with React Router, Axios, Leaflet (mapping), and Recharts.                                                                                                                                                                                                                                                          |
 
 ### Not currently exercised in CI
 
@@ -102,9 +101,9 @@ Backend (FastAPI)
   ├── Services    detection_service (OpenCV/YOLOv8), ai_analysis_service (Claude)
   └── Data layer    PostgreSQL/SQLite (SQLAlchemy), Redis
 
-AI models (code/ai_models, called by detection_service)
-  drone_detector · model_manager (YOLOv8 via Ultralytics/PyTorch,
-  mock fallback if those packages aren't installed)
+AI models (code/ai_models, driven by detection_service)
+  ModelManager -> DetectionPipeline (per camera) -> trackers, threat scoring,
+  swarm and loitering analysis. See code/ai_models/README.md
 
 Integrations (code/integrations)
   Google Maps / Google Earth KML export
@@ -147,20 +146,34 @@ Or bring up the full containerized stack:
 
 ```bash
 cd infrastructure/docker
-cp .env.example .env      # edit with your API keys
-docker-compose up -d
+cp .env.example .env      # edit with your API keys and passwords
+docker compose up -d --build
 ```
 
-| Service      | Image                     | Port(s)      | Purpose                    |
-| :----------- | :------------------------ | :----------- | :------------------------- |
-| `backend`    | built from `code/backend` | 8000         | REST API and WebSocket hub |
-| `frontend`   | built from `frontend`     | 80, 443      | Serves the web dashboard   |
-| `db`         | `postgres:16-alpine`      | 5432         | Primary database           |
-| `redis`      | `redis:7-alpine`          | 6379         | Cache and pub/sub          |
-| `prometheus` | `prom/prometheus:v2.53.0` | 9090         | Metrics collection         |
-| `grafana`    | `grafana/grafana:11.1.0`  | 3001 -> 3000 | Metrics dashboards         |
+On a host with an NVIDIA GPU and the NVIDIA container toolkit:
 
-**Access points:** Frontend at `http://localhost:3000`, API docs at `http://localhost:8000/api/docs`. A seeded default login (`admin` / `quantumfence`) is created by `migrate_and_seed.py`. New self-service signups always land as an operator; only an admin can grant other roles from Settings → Users.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+| Service      | Image                     | Port(s)        | Purpose                                |
+| :----------- | :------------------------ | :------------- | :------------------------------------- |
+| `backend`    | built from `code/`        | 8000           | REST API, WebSocket hub, AI pipeline   |
+| `frontend`   | built from `frontend`     | 80             | Web dashboard and reverse proxy        |
+| `db`         | `postgres:16-alpine`      | 127.0.0.1:5432 | Primary database                       |
+| `redis`      | `redis:7-alpine`          | 127.0.0.1:6379 | Cache                                  |
+| `prometheus` | `prom/prometheus:v2.53.0` | 127.0.0.1:9090 | Metrics collection (`/metrics`)        |
+| `grafana`    | `grafana/grafana:11.1.0`  | 127.0.0.1:3001 | Dashboards, Prometheus pre-provisioned |
+
+Operational notes for the container stack:
+
+- The build context is the repository root for both images, so `code/ai_models` is part of the backend image.
+- The backend runs a single worker and must run as a single instance. Every instance starts every active camera, and the WebSocket hub is in memory, so extra replicas duplicate detections and alerts.
+- On first start the backend downloads `yolov8n.pt` into the `qf-models` volume. Copy a trained `drone_detector.pt` into the same volume and call `POST /api/models/reload` (admin) to enable the dedicated drone model. Without internet access, pre-seed the volume with the weights.
+- The default image installs CPU PyTorch. The GPU override switches to CUDA 12.1 wheels.
+- Postgres, Redis, Prometheus and Grafana are bound to localhost. Change the port mappings if you need remote access, and change the default passwords first.
+
+**Access points:** Frontend at `http://localhost` (containers) or `http://localhost:5173` (dev server), API docs at `http://localhost:8000/api/docs`. A seeded default login (`admin` / `quantumfence`) is created by `migrate_and_seed.py`. New self-service signups always land as an operator; only an admin can grant other roles from Settings → Users.
 
 ## API Surface
 
@@ -171,7 +184,8 @@ Base URL `http://localhost:8000/api`. Interactive docs at `/api/docs`.
 | Auth      | `/api/auth`               | `register`, `login`, `me`, `change-password`, `users` (admin), `users/{id}` (admin) |
 | Cameras   | `/api/cameras`            | list/create                                                                         |
 | Alerts    | `/api/alerts`             | list with filters, `{id}/acknowledge`                                               |
-| Drones    | `/api/drones`             | Drone detection log                                                                 |
+| Drones    | `/api/drones`             | Drone detection log, `active`, `stats`, `tracks` (live tracks and swarm state)      |
+| Models    | `/api/models`             | `status`, `metrics`, `config` (admin), `reload` (admin)                             |
 | Geofences | `/api/geofences`          | list/create, `{id}` (update, delete)                                                |
 | Analytics | `/api/analytics/overview` | System overview stats                                                               |
 | WebSocket | `/ws/{client_id}`         | Real-time event stream (`alert`, `detection`, `drone_detection`, `camera_status`)   |
@@ -191,7 +205,7 @@ pytest
 bash scripts/run_tests.sh
 ```
 
-The backend suite has 12 test files; `ai_models` has 3. The frontend has no test files yet. See [docs/TESTING.md](docs/TESTING.md) for what each suite covers.
+The backend suite has 13 test files; `ai_models` has 8 across unit and integration. The frontend has no test files yet. See [docs/TESTING.md](docs/TESTING.md) for what each suite covers.
 
 ## CI/CD Pipeline
 

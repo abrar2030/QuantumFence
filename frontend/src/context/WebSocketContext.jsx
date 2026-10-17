@@ -6,46 +6,51 @@ import React, {
   useState,
   useCallback,
 } from "react";
-
+import { useAuth } from "./AuthContext";
 const WsContext = createContext(null);
-
+const MAX_BACKOFF_MS = 30000;
 export function WebSocketProvider({ children }) {
+  const { isAuthenticated } = useAuth();
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const attempts = useRef(0);
+  const closedByClient = useRef(false);
   const listeners = useRef({});
   const [connected, setConnected] = useState(false);
   const [latestAlert, setLatestAlert] = useState(null);
   const [latestDetection, setLatestDetection] = useState(null);
   const [latestDrone, setLatestDrone] = useState(null);
   const [cameraStatuses, setCameraStatuses] = useState({});
-
   const emit = useCallback((event, data) => {
     (listeners.current[event] || []).forEach((cb) => cb(data));
   }, []);
-
   const connect = useCallback(() => {
     const token = localStorage.getItem("qf_token");
-    if (!token) return; // not logged in yet
-
-    const base = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
+    if (!token || closedByClient.current) return;
+    const base =
+      import.meta.env.VITE_WS_URL ||
+      (import.meta.env.DEV
+        ? "ws://localhost:8000"
+        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`);
     const clientId = `web_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const url = `${base}/ws/${clientId}`;
-
+    const url = `${base}/ws/${clientId}?token=${encodeURIComponent(token)}`;
     try {
       const ws = new WebSocket(url);
       wsRef.current = ws;
-
       ws.onopen = () => {
+        attempts.current = 0;
         setConnected(true);
         clearTimeout(reconnectTimer.current);
-        // Keep-alive ping every 25 s
         ws._pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping" }));
+            ws.send(
+              JSON.stringify({
+                type: "ping",
+              }),
+            );
           }
         }, 25000);
       };
-
       ws.onmessage = ({ data: raw }) => {
         let msg;
         try {
@@ -54,7 +59,6 @@ export function WebSocketProvider({ children }) {
           return;
         }
         const { type, data, camera_id, status } = msg;
-
         switch (type) {
           case "alert":
             setLatestAlert(data);
@@ -73,40 +77,49 @@ export function WebSocketProvider({ children }) {
               ...prev,
               [String(camera_id)]: status,
             }));
-            emit("camera_status", { camera_id, status });
+            emit("camera_status", {
+              camera_id,
+              status,
+            });
             break;
           case "camera_added":
             emit("camera_added", msg);
             break;
           case "pong":
-            break; // heartbeat reply, ignore
+          case "connected":
+            break;
           default:
             emit(type, msg);
         }
       };
-
       ws.onclose = () => {
         setConnected(false);
         clearInterval(ws._pingInterval);
-        reconnectTimer.current = setTimeout(connect, 3000);
+        if (closedByClient.current) return;
+        const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** attempts.current);
+        attempts.current += 1;
+        reconnectTimer.current = setTimeout(connect, delay);
       };
-
       ws.onerror = () => ws.close();
     } catch {
-      reconnectTimer.current = setTimeout(connect, 5000);
+      const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** attempts.current);
+      attempts.current += 1;
+      reconnectTimer.current = setTimeout(connect, delay);
     }
   }, [emit]);
-
   useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    closedByClient.current = false;
+    attempts.current = 0;
     connect();
     return () => {
+      closedByClient.current = true;
       clearTimeout(reconnectTimer.current);
       clearInterval(wsRef.current?._pingInterval);
       wsRef.current?.close();
+      setConnected(false);
     };
-  }, [connect]);
-
-  /** Subscribe to a named event. Returns an unsubscribe fn. */
+  }, [connect, isAuthenticated]);
   const on = useCallback((event, callback) => {
     if (!listeners.current[event]) listeners.current[event] = [];
     listeners.current[event].push(callback);
@@ -116,27 +129,20 @@ export function WebSocketProvider({ children }) {
       );
     };
   }, []);
-
-  /** Send a raw JSON message to the backend. */
   const send = useCallback((msg) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
-
-  /** Ask backend to start processing a camera. */
   const startCamera = useCallback(
-    (cameraId, streamUrl, config = {}) => {
+    (cameraId) => {
       send({
         type: "start_camera",
         camera_id: cameraId,
-        stream_url: streamUrl,
-        config,
       });
     },
     [send],
   );
-
   return (
     <WsContext.Provider
       value={{
@@ -154,5 +160,4 @@ export function WebSocketProvider({ children }) {
     </WsContext.Provider>
   );
 }
-
 export const useWebSocket = () => useContext(WsContext);

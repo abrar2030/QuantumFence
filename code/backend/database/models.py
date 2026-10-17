@@ -1,7 +1,3 @@
-"""
-QuantumFence - SQLAlchemy Database Models
-"""
-
 import enum
 
 from database.database import Base
@@ -10,8 +6,6 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
-# ─── Enums ───────────────────────────────────────────────────────────────────
 
 
 class CameraType(str, enum.Enum):
@@ -69,12 +63,8 @@ class UserRole(str, enum.Enum):
     VIEWER = "viewer"
 
 
-# ─── Helper: SAEnum with native_enum=False for SQLite ────────────────────────
 def _enum(e):
     return SAEnum(e, native_enum=False)
-
-
-# ─── Models ──────────────────────────────────────────────────────────────────
 
 
 class User(Base):

@@ -1,16 +1,6 @@
-"""
-Tests for application settings, configuration validation,
-and parametrized edge-case coverage across all services.
-"""
-
 import pytest
 
 pytestmark = pytest.mark.unit
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SETTINGS VALIDATION
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 class TestSettings:
@@ -23,7 +13,6 @@ class TestSettings:
     def test_default_database_url_contains_sqlite_in_test(self):
         from config.settings import settings
 
-        # In test mode we force SQLite
         assert (
             "sqlite" in settings.DATABASE_URL or "postgresql" in settings.DATABASE_URL
         )
@@ -75,11 +64,6 @@ class TestSettings:
         assert 0.0 < settings.AI_CONFIDENCE_THRESHOLD <= 1.0
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PARAMETRIZED EDGE CASES - Perimeter Service
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 class TestPerimeterEdgeCases:
 
     @pytest.fixture
@@ -91,13 +75,13 @@ class TestPerimeterEdgeCases:
     @pytest.mark.parametrize(
         "lat,lng,inside",
         [
-            (0.5, 0.5, True),  # centre
-            (0.1, 0.1, True),  # near corner
-            (0.9, 0.9, True),  # near opposite corner
-            (2.0, 0.5, False),  # far right
-            (-1.0, 0.5, False),  # far left
-            (0.5, 2.0, False),  # far up
-            (0.5, -1.0, False),  # far down
+            (0.5, 0.5, True),
+            (0.1, 0.1, True),
+            (0.9, 0.9, True),
+            (2.0, 0.5, False),
+            (-1.0, 0.5, False),
+            (0.5, 2.0, False),
+            (0.5, -1.0, False),
         ],
     )
     def test_point_in_unit_square(self, svc, lat, lng, inside):
@@ -120,11 +104,8 @@ class TestPerimeterEdgeCases:
     @pytest.mark.parametrize(
         "lat1,lng1,lat2,lng2,expected_km",
         [
-            # London to Paris ≈ 340 km
             (51.5074, -0.1278, 48.8566, 2.3522, 340),
-            # Same point
             (33.6844, 73.0479, 33.6844, 73.0479, 0),
-            # New York to LA ≈ 3940 km
             (40.7128, -74.0060, 34.0522, -118.2437, 3940),
         ],
     )
@@ -136,12 +117,7 @@ class TestPerimeterEdgeCases:
         if expected_km == 0:
             assert dist_km < 0.001
         else:
-            assert abs(dist_km - expected_km) / expected_km < 0.05  # within 5%
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PARAMETRIZED EDGE CASES - AI Analysis
-# ═══════════════════════════════════════════════════════════════════════════════
+            assert abs(dist_km - expected_km) / expected_km < 0.05
 
 
 class TestAIAnalysisEdgeCases:
@@ -214,21 +190,32 @@ class TestAIAnalysisEdgeCases:
         assert result["risk_score"] == pytest.approx(expected_float)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PARAMETRIZED EDGE CASES - Model Manager
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 class TestModelManagerEdgeCases:
 
     @pytest.fixture
-    def manager(self):
-        from ai_models.model_manager import MockYOLOModel, ModelManager
+    def manager(self, tmp_path):
+        from ai_models import ModelConfig, ModelManager
 
-        m = ModelManager()
-        m.yolo_model = MockYOLOModel(detection_type="person")
-        m.drone_model = MockYOLOModel(detection_type="drone")
-        m._models_loaded = True
+        weights = tmp_path / "yolov8n.pt"
+        weights.write_bytes(b"x")
+
+        class Fake:
+            names = {0: "person"}
+
+            def predict(self, frame, **kw):
+                return []
+
+        m = ModelManager(
+            ModelConfig(
+                yolo_weights=weights,
+                drone_weights=tmp_path / "none.pt",
+                warmup=False,
+                auto_download=False,
+                device="cpu",
+            ),
+            model_factory=lambda p: Fake(),
+        )
+        m.load()
         return m
 
     @pytest.mark.parametrize(
@@ -237,130 +224,145 @@ class TestModelManagerEdgeCases:
             (200, 60, 0.02, "fixed_wing"),
             (80, 70, 0.02, "quadcopter"),
             (60, 50, 0.02, "quadcopter"),
-            (10, 10, 0.0005, "micro_drone"),
+            (10, 10, 0.0001, "micro_drone"),
             (50, 40, 0.015, "quadcopter"),
         ],
     )
-    def test_drone_classification_parametrized(
-        self, manager, w, h, size, expected_type
-    ):
-        result = manager._classify_drone_type(w, h, size)
-        assert result == expected_type
+    def test_drone_classification_parametrized(self, w, h, size, expected_type):
+        from ai_models.analysis import classify_drone_type
 
-    @pytest.mark.parametrize(
-        "relative_size,expected_altitude",
-        [
-            (0.0005, 200.0),
-            (0.005, 100.0),
-            (0.02, 50.0),
-            (0.08, 20.0),
-        ],
-    )
-    def test_altitude_estimation_parametrized(
-        self, manager, relative_size, expected_altitude
-    ):
-        alt = manager._estimate_altitude(relative_size)
-        assert alt == pytest.approx(expected_altitude)
+        assert classify_drone_type(w, h, size) == expected_type
 
     @pytest.mark.parametrize(
         "frame_shape",
-        [
-            (480, 640, 3),
-            (720, 1280, 3),
-            (1080, 1920, 3),
-            (2160, 3840, 3),
-        ],
+        [(480, 640, 3), (720, 1280, 3), (1080, 1920, 3), (2160, 3840, 3)],
     )
     def test_detect_persons_accepts_various_resolutions(self, manager, frame_shape):
         import numpy as np
 
         frame = np.zeros(frame_shape, dtype=np.uint8)
-        result = manager.detect_persons(frame)
-        assert isinstance(result, list)
+        assert manager.detect_persons(frame) == []
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PARAMETRIZED EDGE CASES - Drone Tracker
-# ═══════════════════════════════════════════════════════════════════════════════
+    @pytest.mark.parametrize("bad", [None, "frame", [1, 2, 3]])
+    def test_invalid_frames_do_not_raise_from_legacy_api(self, manager, bad):
+        assert manager.detect_persons(bad) == []
 
 
 class TestDroneTrackerEdgeCases:
 
+    SHAPE = (1080, 1920, 3)
+
     @pytest.fixture
     def detector(self):
-        from ai_models.drone_detector import DroneDetector
+        from ai_models import DroneDetector, ModelConfig
 
-        return DroneDetector(confidence_threshold=0.45)
+        return DroneDetector(ModelConfig(track_min_hits=1), confidence_threshold=0.45)
 
-    @pytest.fixture
-    def blank_frame(self):
-        import numpy as np
+    def _det(self, x, confidence=0.88, size=30):
+        from ai_models import BoundingBox, Detection, ObjectKind
 
-        return np.zeros((1080, 1920, 3), dtype=np.uint8)
+        return Detection(
+            ObjectKind.DRONE, "drone", confidence, BoundingBox(x, 150, size, size)
+        )
 
     @pytest.mark.parametrize(
         "confidence,expected_count",
-        [
-            (0.90, 1),  # above threshold → tracked
-            (0.45, 1),  # at threshold → tracked
-            (0.44, 0),  # below threshold → ignored
-            (0.10, 0),  # well below → ignored
-        ],
+        [(0.90, 1), (0.45, 1), (0.44, 0), (0.10, 0)],
     )
-    def test_confidence_threshold_boundary(
-        self, detector, blank_frame, confidence, expected_count
-    ):
-        dets = [
-            {"confidence": confidence, "bbox": [600, 150, 30, 30], "class": "drone"}
-        ]
-        tracks = detector.process_frame(blank_frame, dets)
-        assert len(tracks) == expected_count
+    def test_confidence_threshold_boundary(self, detector, confidence, expected_count):
+        update = detector.process_frame(self.SHAPE, [self._det(600, confidence)])
+        assert len(update.matched) == expected_count
 
     @pytest.mark.parametrize("num_drones", [1, 2, 3, 5])
-    def test_multiple_drones_tracked_independently(
-        self, detector, blank_frame, num_drones
-    ):
-        pass
-
-        # Spread drones far apart so they don't merge
-        dets = [
-            {"confidence": 0.88, "bbox": [i * 300, 100, 30, 30], "class": "drone"}
-            for i in range(num_drones)
-        ]
-        tracks = detector.process_frame(blank_frame, dets)
-        assert len(tracks) == num_drones
+    def test_multiple_drones_tracked_independently(self, detector, num_drones):
+        dets = [self._det(i * 300) for i in range(num_drones)]
+        update = detector.process_frame(self.SHAPE, dets)
+        assert len(update.matched) == num_drones
+        assert len({t.track_id for t in update.matched}) == num_drones
 
     @pytest.mark.parametrize(
         "is_authorized,expect_lower_score",
-        [
-            (True, True),
-            (False, False),
-        ],
+        [(True, True), (False, False)],
     )
     def test_authorization_status_affects_threat_score(
         self, detector, is_authorized, expect_lower_score
     ):
-        from ai_models.drone_detector import DroneTrack
+        from ai_models import ModelConfig
+        from ai_models.analysis import ThreatScorer
 
-        t_ref = DroneTrack(track_id=1)
-        t_ref.is_authorized = False
-        t_test = DroneTrack(track_id=2)
-        t_test.is_authorized = is_authorized
-        for t in (t_ref, t_test):
-            t.positions.append((500, 300, 25, 25))
-
-        score_ref = detector._calculate_threat_score(t_ref, (1080, 1920, 3))
-        score_test = detector._calculate_threat_score(t_test, (1080, 1920, 3))
-
+        scorer = ThreatScorer(ModelConfig())
+        track = detector.process_frame(self.SHAPE, [self._det(500, size=25)]).matched[0]
+        reference = scorer.score(track, self.SHAPE, False)
+        tested = scorer.score(track, self.SHAPE, is_authorized)
         if expect_lower_score:
-            assert score_test < score_ref
+            assert tested < reference
         else:
-            assert score_test == pytest.approx(score_ref)
+            assert tested == pytest.approx(reference)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PARAMETRIZED EDGE CASES - Google Earth
-# ═══════════════════════════════════════════════════════════════════════════════
+class TestModelSettings:
+
+    def test_model_paths_resolved_to_absolute(self):
+        from pathlib import Path
+
+        from config.settings import settings
+
+        assert Path(settings.YOLO_MODEL_PATH).is_absolute()
+        assert Path(settings.DRONE_MODEL_PATH).is_absolute()
+
+    def test_relative_path_resolves_against_code_dir(self):
+        from config.settings import CODE_DIR, Settings
+
+        s = Settings(YOLO_MODEL_PATH="ai_models/weights/custom.pt")
+        assert s.YOLO_MODEL_PATH == str(CODE_DIR / "ai_models/weights/custom.pt")
+
+    def test_absolute_path_untouched(self):
+        from config.settings import Settings
+
+        assert (
+            Settings(DRONE_MODEL_PATH="/opt/models/drone.pt").DRONE_MODEL_PATH
+            == "/opt/models/drone.pt"
+        )
+
+    def test_build_model_config_maps_settings(self):
+        from config.model_config import build_model_config
+        from config.settings import Settings
+
+        s = Settings(
+            DETECTION_CONFIDENCE=0.6,
+            DRONE_CONFIDENCE=0.3,
+            TRACK_MIN_HITS=3,
+            MODEL_ALLOW_MOCK_FALLBACK=True,
+            AUTHORIZED_DRONE_ZONES=[{"lat": 1.0, "lng": 2.0, "radius_m": 30}],
+        )
+        cfg = build_model_config(s)
+        assert cfg.confidence == 0.6 and cfg.drone_confidence == 0.3
+        assert cfg.track_min_hits == 3 and cfg.allow_mock_fallback is True
+        assert cfg.authorized_zones[0].radius_m == 30.0
+
+    def test_defaults_do_not_enable_mock_fallback(self):
+        from config.settings import Settings
+
+        assert Settings().MODEL_ALLOW_MOCK_FALLBACK is False
+
+    def test_ensure_directories_creates_weights_dir(self, tmp_path, monkeypatch):
+        from config import settings as settings_module
+
+        monkeypatch.setattr(
+            settings_module.settings, "YOLO_MODEL_PATH", str(tmp_path / "w1" / "a.pt")
+        )
+        monkeypatch.setattr(
+            settings_module.settings, "DRONE_MODEL_PATH", str(tmp_path / "w2" / "b.pt")
+        )
+        monkeypatch.setattr(
+            settings_module.settings, "SNAPSHOTS_DIR", str(tmp_path / "s")
+        )
+        monkeypatch.setattr(
+            settings_module.settings, "RECORDINGS_DIR", str(tmp_path / "r")
+        )
+        monkeypatch.chdir(tmp_path)
+        settings_module.ensure_directories()
+        assert (tmp_path / "w1").is_dir() and (tmp_path / "w2").is_dir()
 
 
 class TestGoogleEarthEdgeCases:
@@ -368,7 +370,6 @@ class TestGoogleEarthEdgeCases:
     @pytest.fixture
     def geo(self):
         from config.settings import settings
-
         from integrations.google_earth import GoogleEarthIntegration
 
         settings.GOOGLE_MAPS_API_KEY = ""
@@ -381,7 +382,7 @@ class TestGoogleEarthEdgeCases:
             (90, 45, 200),
             (180, 120, 50),
             (270, 60, 300),
-            (360, 90, 100),  # same as 0
+            (360, 90, 100),
         ],
     )
     def test_fov_polygon_all_directions(self, geo, direction_deg, fov_deg, range_m):
@@ -400,11 +401,11 @@ class TestGoogleEarthEdgeCases:
     @pytest.mark.parametrize(
         "bbox_x,bbox_y",
         [
-            (0.0, 0.5),  # far left
-            (0.5, 0.5),  # centre
-            (1.0, 0.5),  # far right
-            (0.5, 0.0),  # top (far)
-            (0.5, 1.0),  # bottom (near)
+            (0.0, 0.5),
+            (0.5, 0.5),
+            (1.0, 0.5),
+            (0.5, 0.0),
+            (0.5, 1.0),
         ],
     )
     def test_location_estimation_valid_for_all_bbox_positions(

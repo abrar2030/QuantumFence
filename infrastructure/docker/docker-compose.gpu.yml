@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}
+    environment:
+      MODEL_DEVICE: ${MODEL_DEVICE:-cuda:0}
+      MODEL_HALF_PRECISION: ${MODEL_HALF_PRECISION:-true}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

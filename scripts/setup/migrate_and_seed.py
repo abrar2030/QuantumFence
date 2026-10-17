@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-QuantumFence - Database Migration & Seed Script
-Run this to initialize DB, apply migrations, and seed demo data.
-"""
 import os
 import sys
 
@@ -18,7 +13,7 @@ from database.models import Camera, CameraStatus, CameraType, Geofence, User, Us
 def run_migrations():
     print("→ Running database migrations...")
     Base.metadata.create_all(bind=engine)
-    print("✓ Database schema created/updated")
+    print("Database schema created/updated")
 
 
 def seed_users(db):
@@ -229,7 +224,7 @@ def main():
         seed_users(db)
         seed_geofences(db)
         seed_cameras(db)
-        print("\n✓ Database setup complete!\n")
+        print("\nDatabase setup complete!\n")
         print("Default credentials:")
         print("  admin    / quantumfence  (Administrator)")
         print("  operator / operator123   (Operator)")

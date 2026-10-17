@@ -1,14 +1,10 @@
-"""
-QuantumFence - Drone Detection Routes
-"""
-
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from api.routes.auth import User, get_current_user
 from database.database import get_db
 from database.models import DroneDetection, ThreatLevel
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -35,9 +31,9 @@ class DroneOut(BaseModel):
 
 @router.get("/", response_model=List[DroneOut])
 async def list_drone_detections(
-    skip: int = 0,
-    limit: int = 50,
-    hours: int = 24,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    hours: int = Query(24, ge=1, le=24 * 90),
     camera_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -51,14 +47,17 @@ async def list_drone_detections(
 
 @router.get("/active")
 async def get_active_drones(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Drones detected in the last 5 minutes."""
     since = datetime.now(timezone.utc) - timedelta(minutes=5)
     drones = db.query(DroneDetection).filter(DroneDetection.timestamp >= since).all()
+    ds = getattr(request.app.state, "detection_service", None)
+    live_tracks = ds.get_live_tracks("drone") if ds else []
     return {
         "active_drones": len(drones),
+        "live_tracks": live_tracks,
         "detections": [
             DroneOut.model_validate(d).model_dump(mode="json") for d in drones
         ],
@@ -79,7 +78,7 @@ async def drone_stats(
         .count()
     )
     authorized = (
-        db.query(DroneDetection).filter(DroneDetection.is_authorized == True).count()
+        db.query(DroneDetection).filter(DroneDetection.is_authorized.is_(True)).count()
     )
     unauthorized = total - authorized
     return {
@@ -88,4 +87,20 @@ async def drone_stats(
         "authorized": authorized,
         "unauthorized": unauthorized,
         "threat_percentage": round((unauthorized / max(total, 1)) * 100, 1),
+    }
+
+
+@router.get("/tracks")
+async def live_drone_tracks(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    ds = getattr(request.app.state, "detection_service", None)
+    tracks = ds.get_live_tracks("drone") if ds else []
+    swarm_cameras = ds.swarm_cameras() if ds else []
+    return {
+        "active_tracks": len(tracks),
+        "swarm_detected": bool(swarm_cameras),
+        "swarm_cameras": swarm_cameras,
+        "tracks": tracks,
     }

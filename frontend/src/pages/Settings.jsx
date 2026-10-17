@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { systemApi, authApi } from "../services/api";
+import { systemApi, authApi, modelApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-
 function Field({ label, defaultValue, type = "text", placeholder }) {
   return (
     <div>
@@ -26,7 +25,6 @@ function Field({ label, defaultValue, type = "text", placeholder }) {
     </div>
   );
 }
-
 function Toggle({ label, defaultOn = false }) {
   const [on, setOn] = useState(defaultOn);
   return (
@@ -48,7 +46,6 @@ function Toggle({ label, defaultOn = false }) {
     </button>
   );
 }
-
 const NEW_USER_INITIAL = {
   username: "",
   full_name: "",
@@ -56,22 +53,157 @@ const NEW_USER_INITIAL = {
   password: "",
   role: "operator",
 };
-
+function ModelRuntimePanel({ isAdmin }) {
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const r = await modelApi.status();
+      setStatus(r.data);
+      setError("");
+    } catch (e) {
+      setStatus(null);
+      setError(e.response?.data?.detail || "Model runtime unavailable");
+    }
+  }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+  const reload = async () => {
+    setBusy(true);
+    try {
+      await modelApi.reload();
+      await load();
+    } catch (e) {
+      setError(e.response?.data?.detail || "Reload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const inference = status?.metrics?.timings?.inference;
+  const rows = status
+    ? [
+        ["HEALTH", status.health?.toUpperCase()],
+        ["DEVICE", String(status.device).toUpperCase()],
+        ["DRONE MODE", String(status.drone_mode).toUpperCase()],
+        ["GENERAL WEIGHTS", status.general_model?.weights || "-"],
+        ["DRONE WEIGHTS", status.drone_model?.weights || "-"],
+        [
+          "INFERENCE",
+          inference
+            ? `${inference.avg_ms.toFixed(1)} ms avg / ${inference.p95_ms.toFixed(1)} ms p95 / ${inference.rate_per_s.toFixed(1)} fps`
+            : "-",
+        ],
+      ]
+    : [];
+  return (
+    <div
+      className="qf-card"
+      style={{
+        display: "grid",
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--qf-text-muted)",
+            letterSpacing: 2,
+          }}
+        >
+          MODEL RUNTIME
+        </h3>
+        {isAdmin && (
+          <button
+            className="qf-btn qf-btn-outline"
+            onClick={reload}
+            disabled={busy}
+          >
+            {busy ? "RELOADING" : "RELOAD MODELS"}
+          </button>
+        )}
+      </div>
+      {error && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--qf-red)",
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {rows.map(([k, v]) => (
+        <div
+          key={k}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 16,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+          }}
+        >
+          <span
+            style={{
+              color: "var(--qf-text-muted)",
+            }}
+          >
+            {k}
+          </span>
+          <span
+            style={{
+              color: "var(--qf-text-primary)",
+              textAlign: "right",
+              wordBreak: "break-all",
+            }}
+          >
+            {v}
+          </span>
+        </div>
+      ))}
+      {status?.errors?.map((e) => (
+        <div
+          key={e}
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--qf-orange)",
+          }}
+        >
+          {e}
+        </div>
+      ))}
+    </div>
+  );
+}
 export default function Settings() {
   const [tab, setTab] = useState("system");
   const [saved, setSaved] = useState(false);
   const [health, setHealth] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-
-  // ── Users tab state ──────────────────────────────────────────────────────
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [newUser, setNewUser] = useState(NEW_USER_INITIAL);
   const [creatingUser, setCreatingUser] = useState(false);
-  const [userMsg, setUserMsg] = useState({ kind: "", text: "" });
+  const [userMsg, setUserMsg] = useState({
+    kind: "",
+    text: "",
+  });
   const [updatingUserId, setUpdatingUserId] = useState(null);
-
   const loadUsers = useCallback(async () => {
     if (!isAdmin) return;
     setUsersLoading(true);
@@ -87,15 +219,15 @@ export default function Settings() {
       setUsersLoading(false);
     }
   }, [isAdmin]);
-
   useEffect(() => {
     if (tab === "users") loadUsers();
   }, [tab, loadUsers]);
-
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    setUserMsg({ kind: "", text: "" });
-
+    setUserMsg({
+      kind: "",
+      text: "",
+    });
     if (
       !newUser.username.trim() ||
       !newUser.email.trim() ||
@@ -114,7 +246,6 @@ export default function Settings() {
       });
       return;
     }
-
     setCreatingUser(true);
     try {
       await authApi.register({
@@ -139,11 +270,12 @@ export default function Settings() {
       setCreatingUser(false);
     }
   };
-
   const handleRoleChange = async (targetUser, role) => {
     setUpdatingUserId(targetUser.id);
     try {
-      await authApi.updateUser(targetUser.id, { role });
+      await authApi.updateUser(targetUser.id, {
+        role,
+      });
       await loadUsers();
     } catch (e) {
       setUserMsg({
@@ -154,7 +286,6 @@ export default function Settings() {
       setUpdatingUserId(null);
     }
   };
-
   const handleToggleUserActive = async (targetUser) => {
     setUpdatingUserId(targetUser.id);
     try {
@@ -171,31 +302,53 @@ export default function Settings() {
       setUpdatingUserId(null);
     }
   };
-
   const save = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
-
   const checkHealth = async () => {
     try {
       const r = await systemApi.health();
       setHealth(r.data);
     } catch {
-      setHealth({ status: "error", message: "Backend not reachable" });
+      setHealth({
+        status: "error",
+        message: "Backend not reachable",
+      });
     }
   };
-
   const TABS = [
-    { id: "system", label: "SYSTEM" },
-    { id: "ai", label: "AI ENGINE" },
-    { id: "notifications", label: "NOTIFICATIONS" },
-    ...(isAdmin ? [{ id: "users", label: "USERS" }] : []),
-    { id: "diagnostics", label: "DIAGNOSTICS" },
+    {
+      id: "system",
+      label: "SYSTEM",
+    },
+    {
+      id: "ai",
+      label: "AI ENGINE",
+    },
+    {
+      id: "notifications",
+      label: "NOTIFICATIONS",
+    },
+    ...(isAdmin
+      ? [
+          {
+            id: "users",
+            label: "USERS",
+          },
+        ]
+      : []),
+    {
+      id: "diagnostics",
+      label: "DIAGNOSTICS",
+    },
   ];
-
   return (
-    <div style={{ padding: 28 }}>
+    <div
+      style={{
+        padding: 28,
+      }}
+    >
       <h1
         style={{
           fontFamily: "var(--font-display)",
@@ -208,7 +361,7 @@ export default function Settings() {
         SYSTEM SETTINGS
       </h1>
 
-      {/* Tab bar */}
+      {}
       <div
         style={{
           display: "flex",
@@ -240,10 +393,20 @@ export default function Settings() {
         ))}
       </div>
 
-      <div className="qf-card" style={{ maxWidth: 740 }}>
-        {/* ── System ────────────────────────────────────────────────────────── */}
+      <div
+        className="qf-card"
+        style={{
+          maxWidth: 740,
+        }}
+      >
+        {}
         {tab === "system" && (
-          <div style={{ display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 18,
+            }}
+          >
             <h3
               style={{
                 fontFamily: "var(--font-mono)",
@@ -303,9 +466,14 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── AI Engine ─────────────────────────────────────────────────────── */}
+        {}
         {tab === "ai" && (
-          <div style={{ display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 18,
+            }}
+          >
             <h3
               style={{
                 fontFamily: "var(--font-mono)",
@@ -316,6 +484,7 @@ export default function Settings() {
             >
               AI ENGINE CONFIGURATION
             </h3>
+            <ModelRuntimePanel isAdmin={isAdmin} />
             <Field
               label="Anthropic API Key"
               type="password"
@@ -342,14 +511,6 @@ export default function Settings() {
                 placeholder="your-gee-project-id"
               />
               <Field
-                label="YOLO Model Path"
-                defaultValue="ai_models/weights/yolov8n.pt"
-              />
-              <Field
-                label="Drone Model Path"
-                defaultValue="ai_models/weights/drone_detector.pt"
-              />
-              <Field
                 label="AI Confidence Threshold"
                 defaultValue="0.65"
                 type="number"
@@ -373,7 +534,13 @@ export default function Settings() {
               >
                 FEATURES
               </label>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
                 <Toggle label="AI THREAT ANALYSIS" defaultOn={true} />
                 <Toggle label="DRONE CLASSIFICATION" defaultOn={true} />
                 <Toggle label="MULTI-THREAT DETECT" defaultOn={true} />
@@ -384,9 +551,14 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── Notifications ─────────────────────────────────────────────────── */}
+        {}
         {tab === "notifications" && (
-          <div style={{ display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 18,
+            }}
+          >
             <h3
               style={{
                 fontFamily: "var(--font-mono)",
@@ -435,7 +607,12 @@ export default function Settings() {
               >
                 ALERT ON SEVERITY
               </label>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                }}
+              >
                 <Toggle label="CRITICAL" defaultOn={true} />
                 <Toggle label="HIGH" defaultOn={true} />
                 <Toggle label="MEDIUM" defaultOn={false} />
@@ -445,9 +622,14 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── Users (admin only) ────────────────────────────────────────────── */}
+        {}
         {tab === "users" && isAdmin && (
-          <div style={{ display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 18,
+            }}
+          >
             <h3
               style={{
                 fontFamily: "var(--font-mono)",
@@ -474,7 +656,10 @@ export default function Settings() {
                     className="qf-input"
                     value={newUser.username}
                     onChange={(e) =>
-                      setNewUser((f) => ({ ...f, username: e.target.value }))
+                      setNewUser((f) => ({
+                        ...f,
+                        username: e.target.value,
+                      }))
                     }
                     placeholder="j.operator"
                   />
@@ -485,7 +670,10 @@ export default function Settings() {
                     className="qf-input"
                     value={newUser.full_name}
                     onChange={(e) =>
-                      setNewUser((f) => ({ ...f, full_name: e.target.value }))
+                      setNewUser((f) => ({
+                        ...f,
+                        full_name: e.target.value,
+                      }))
                     }
                     placeholder="Jane Operator"
                   />
@@ -497,7 +685,10 @@ export default function Settings() {
                     type="email"
                     value={newUser.email}
                     onChange={(e) =>
-                      setNewUser((f) => ({ ...f, email: e.target.value }))
+                      setNewUser((f) => ({
+                        ...f,
+                        email: e.target.value,
+                      }))
                     }
                     placeholder="jane@yourcompany.com"
                   />
@@ -509,21 +700,33 @@ export default function Settings() {
                     type="password"
                     value={newUser.password}
                     onChange={(e) =>
-                      setNewUser((f) => ({ ...f, password: e.target.value }))
+                      setNewUser((f) => ({
+                        ...f,
+                        password: e.target.value,
+                      }))
                     }
                     placeholder="Min. 8 characters"
                   />
                 </div>
               </div>
 
-              <div style={{ marginBottom: 14 }}>
+              <div
+                style={{
+                  marginBottom: 14,
+                }}
+              >
                 <label className="field-label">ROLE</label>
                 <select
                   className="qf-select"
-                  style={{ width: "100%" }}
+                  style={{
+                    width: "100%",
+                  }}
                   value={newUser.role}
                   onChange={(e) =>
-                    setNewUser((f) => ({ ...f, role: e.target.value }))
+                    setNewUser((f) => ({
+                      ...f,
+                      role: e.target.value,
+                    }))
                   }
                 >
                   {["admin", "operator", "viewer"].map((r) => (
@@ -553,14 +756,16 @@ export default function Settings() {
                         : "var(--qf-red)",
                   }}
                 >
-                  {userMsg.kind === "success" ? "✓" : "⚠"} {userMsg.text}
+                  {userMsg.kind === "success" ? "+" : "!"} {userMsg.text}
                 </div>
               )}
 
               <button
                 type="submit"
                 className="qf-btn qf-btn-primary"
-                style={{ justifyContent: "center" }}
+                style={{
+                  justifyContent: "center",
+                }}
                 disabled={creatingUser}
               >
                 {creatingUser ? "CREATING..." : "+ CREATE USER"}
@@ -586,7 +791,11 @@ export default function Settings() {
               ALL USERS {usersLoading ? "· LOADING…" : `· ${users.length}`}
             </h3>
 
-            <div style={{ overflowX: "auto" }}>
+            <div
+              style={{
+                overflowX: "auto",
+              }}
+            >
               <table className="qf-table">
                 <thead>
                   <tr>
@@ -603,7 +812,11 @@ export default function Settings() {
                     return (
                       <tr key={u.id}>
                         <td>
-                          <div style={{ fontWeight: 600 }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                            }}
+                          >
                             {u.full_name || u.username}
                           </div>
                           <div
@@ -625,7 +838,10 @@ export default function Settings() {
                             onChange={(e) =>
                               handleRoleChange(u, e.target.value)
                             }
-                            style={{ fontSize: 11, padding: "6px 10px" }}
+                            style={{
+                              fontSize: 11,
+                              padding: "6px 10px",
+                            }}
                           >
                             {["admin", "operator", "viewer"].map((r) => (
                               <option key={r} value={r}>
@@ -689,20 +905,33 @@ export default function Settings() {
               }}
             >
               LOGGED IN AS:{" "}
-              <span style={{ color: "var(--qf-cyan)" }}>
+              <span
+                style={{
+                  color: "var(--qf-cyan)",
+                }}
+              >
                 {user?.username?.toUpperCase()}
               </span>{" "}
               &nbsp;·&nbsp; ROLE:{" "}
-              <span style={{ color: "var(--qf-cyan)" }}>
+              <span
+                style={{
+                  color: "var(--qf-cyan)",
+                }}
+              >
                 {user?.role?.toUpperCase()}
               </span>
             </div>
           </div>
         )}
 
-        {/* ── Diagnostics ───────────────────────────────────────────────────── */}
+        {}
         {tab === "diagnostics" && (
-          <div style={{ display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 18,
+            }}
+          >
             <h3
               style={{
                 fontFamily: "var(--font-mono)",
@@ -715,7 +944,10 @@ export default function Settings() {
             </h3>
             <button
               className="qf-btn qf-btn-outline"
-              style={{ width: "fit-content", fontSize: 12 }}
+              style={{
+                width: "fit-content",
+                fontSize: 12,
+              }}
               onClick={checkHealth}
             >
               ↻ CHECK BACKEND HEALTH
@@ -742,8 +974,8 @@ export default function Settings() {
                   }}
                 >
                   {health.status === "healthy"
-                    ? "✓ BACKEND HEALTHY"
-                    : "✗ BACKEND ERROR"}
+                    ? "BACKEND HEALTHY"
+                    : "BACKEND ERROR"}
                 </div>
                 {health.components &&
                   Object.entries(health.components).map(([k, v]) => (
@@ -791,7 +1023,12 @@ export default function Settings() {
                 </div>
               </div>
             )}
-            <div style={{ display: "grid", gap: 10 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+              }}
+            >
               {[
                 [
                   "API Docs",
@@ -843,7 +1080,7 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Save footer */}
+        {}
         {tab !== "diagnostics" && tab !== "users" && (
           <div
             style={{
@@ -862,7 +1099,7 @@ export default function Settings() {
                   color: "var(--qf-green)",
                 }}
               >
-                ✓ SETTINGS SAVED
+                SETTINGS SAVED
               </span>
             )}
             <button className="qf-btn qf-btn-primary" onClick={save}>

@@ -1,9 +1,3 @@
-"""
-Tests for AIAnalysisService.
-Covers the Claude API integration, response parsing, fallback paths,
-and threat level derivation - all without real API calls.
-"""
-
 import json
 from unittest.mock import MagicMock
 
@@ -13,12 +7,8 @@ from services.ai_analysis_service import AIAnalysisService
 pytestmark = pytest.mark.unit
 
 
-# ─── Fixtures ─────────────────────────────────────────────────────────────────
-
-
 @pytest.fixture
 def disabled_svc():
-    """Service with AI disabled (no API key)."""
     svc = AIAnalysisService()
     svc.enabled = False
     return svc
@@ -26,7 +16,6 @@ def disabled_svc():
 
 @pytest.fixture
 def enabled_svc():
-    """Service with AI enabled but Anthropic client mocked."""
     svc = AIAnalysisService()
     svc.enabled = True
     svc.client = MagicMock()
@@ -34,13 +23,9 @@ def enabled_svc():
 
 
 def _make_api_response(json_payload: dict) -> MagicMock:
-    """Build a mock Anthropic response object."""
     resp = MagicMock()
     resp.content = [MagicMock(text=json.dumps(json_payload))]
     return resp
-
-
-# ─── Disabled-mode (fallback) ─────────────────────────────────────────────────
 
 
 class TestAIAnalysisDisabled:
@@ -87,9 +72,6 @@ class TestAIAnalysisDisabled:
         assert result["risk_score"] >= 0.7
 
 
-# ─── Response parsing ─────────────────────────────────────────────────────────
-
-
 class TestResponseParsing:
 
     def test_parse_valid_json_response(self, enabled_svc):
@@ -128,13 +110,12 @@ class TestResponseParsing:
         result = enabled_svc._parse_analysis_response(
             "Not valid JSON !!!", "person", 0.8
         )
-        # Must still return a valid dict with required keys
         assert "threat_level" in result
         assert "summary" in result
         assert "recommended_action" in result
 
     def test_parse_missing_fields_use_defaults(self, enabled_svc):
-        raw = json.dumps({"threat_level": "low"})  # missing other fields
+        raw = json.dumps({"threat_level": "low"})
         result = enabled_svc._parse_analysis_response(raw, "person", 0.55)
         assert result["threat_level"] == "low"
         assert result["summary"] != ""
@@ -144,9 +125,6 @@ class TestResponseParsing:
         raw = json.dumps({"threat_level": "high", "risk_score": "0.88"})
         result = enabled_svc._parse_analysis_response(raw, "drone", 0.88)
         assert isinstance(result["risk_score"], float)
-
-
-# ─── System prompt ────────────────────────────────────────────────────────────
 
 
 class TestSystemPrompt:
@@ -162,9 +140,6 @@ class TestSystemPrompt:
     def test_system_prompt_instructs_json(self, enabled_svc):
         prompt = enabled_svc._get_system_prompt()
         assert "JSON" in prompt
-
-
-# ─── Threat analysis prompt construction ─────────────────────────────────────
 
 
 class TestAnalysisPrompt:
@@ -188,9 +163,6 @@ class TestAnalysisPrompt:
     def test_prompt_includes_location_when_provided(self, enabled_svc):
         p = enabled_svc._build_analysis_prompt("person", 0.7, "Cam", "East Tower", {})
         assert "East Tower" in p
-
-
-# ─── Enabled-mode (mocked API) ────────────────────────────────────────────────
 
 
 class TestAIAnalysisEnabled:
@@ -236,7 +208,6 @@ class TestAIAnalysisEnabled:
     async def test_api_exception_falls_back_to_default(self, enabled_svc):
         enabled_svc.client.messages.create.side_effect = Exception("API down")
         result = await enabled_svc.analyze_threat("vehicle", 0.75, "Cam", None)
-        # Should not raise; should return fallback
         assert "threat_level" in result
         assert "summary" in result
 
@@ -264,9 +235,6 @@ class TestAIAnalysisEnabled:
     async def test_empty_detections_returns_default(self, enabled_svc):
         result = await enabled_svc.analyze_multiple_threats([], "Cam 01")
         assert "threat_level" in result
-
-
-# ─── Default fallbacks ────────────────────────────────────────────────────────
 
 
 class TestDefaultFallbacks:

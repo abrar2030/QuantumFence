@@ -1,7 +1,3 @@
-"""
-QuantumFence - Authentication Routes
-"""
-
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -20,17 +16,14 @@ pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto",
     bcrypt__rounds=12,
-    bcrypt__truncate_error=False,  # passlib >= 1.7.4 on Py3.11 raises ValueError otherwise
+    bcrypt__truncate_error=False,
 )
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-# Does not error when no token is supplied - used to let /register tell apart
-# an anonymous self-signup from an authenticated admin creating a user.
 optional_oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/auth/login", auto_error=False
 )
 
 
-# ─── Schemas ─────────────────────────────────────────────────────────────────
 class UserCreate(BaseModel):
     username: str
     email: str
@@ -73,7 +66,6 @@ class UserAdminUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
@@ -100,28 +92,35 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    exc = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def user_from_token(token: Optional[str], db: Session) -> Optional[User]:
+    if not token:
+        return None
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
-        username: str = payload.get("sub")
-        if not username or payload.get("type") != "access":
-            raise exc
     except JWTError:
-        raise exc
-
+        return None
+    username = payload.get("sub")
+    if not username or payload.get("type") != "access":
+        return None
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
-        raise exc
+        return None
+    return user
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    user = user_from_token(token, db)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
@@ -137,9 +136,6 @@ async def get_optional_admin(
     token: Optional[str] = Depends(optional_oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
-    """Returns the caller only if they are an authenticated, active admin;
-    returns None for anonymous requests or any invalid/non-admin token
-    (never raises, so this is safe to use on a public endpoint)."""
     if not token:
         return None
     try:
@@ -157,7 +153,6 @@ async def get_optional_admin(
     return None
 
 
-# ─── Routes ──────────────────────────────────────────────────────────────────
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
@@ -169,11 +164,6 @@ async def register(
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(400, "Email already registered")
 
-    # This endpoint is intentionally public so the Sign Up page can call it
-    # without a token. Only an already-authenticated admin (e.g. creating a
-    # teammate from Settings → Users) may hand out a non-default role;
-    # anonymous self-signup is always forced to OPERATOR regardless of what
-    # the request body asks for.
     role = user_data.role
     if role != UserRole.OPERATOR and requesting_admin is None:
         raise HTTPException(
@@ -230,7 +220,6 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Self-service profile update (full name / email)."""
     if update.email and update.email != current_user.email:
         if db.query(User).filter(User.email == update.email).first():
             raise HTTPException(400, "Email already registered")
@@ -248,7 +237,6 @@ async def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Self-service password change; requires current password."""
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(400, "Current password is incorrect")
     if len(payload.new_password) < 8:
@@ -263,7 +251,6 @@ async def list_users(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Admin-only: list all system users."""
     return [UserOut.model_validate(u) for u in db.query(User).order_by(User.id).all()]
 
 
@@ -274,7 +261,6 @@ async def update_user_admin(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Admin-only: update another user's role or active status."""
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(404, "User not found")

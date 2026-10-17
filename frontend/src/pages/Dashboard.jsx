@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { analyticsApi, alertApi, systemApi } from "../services/api";
+import { analyticsApi, alertApi, modelApi, systemApi } from "../services/api";
 import { useWebSocket } from "../context/WebSocketContext";
-
-// ── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
   icon,
   label,
@@ -14,7 +12,10 @@ function StatCard({
   return (
     <div
       className="qf-card"
-      style={{ position: "relative", overflow: "hidden" }}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
       <div
         style={{
@@ -52,7 +53,11 @@ function StatCard({
               fontWeight: 900,
               color,
               lineHeight: 1,
-              ...(pulse ? { animation: "flicker 2s infinite" } : {}),
+              ...(pulse
+                ? {
+                    animation: "flicker 2s infinite",
+                  }
+                : {}),
             }}
           >
             {value ?? "-"}
@@ -69,15 +74,26 @@ function StatCard({
             </div>
           )}
         </div>
-        <div style={{ fontSize: 28, opacity: 0.4 }}>{icon}</div>
+        <div
+          style={{
+            fontSize: 28,
+            opacity: 0.4,
+          }}
+        >
+          {icon}
+        </div>
       </div>
     </div>
   );
 }
-
-// ── Threat Gauge ─────────────────────────────────────────────────────────────
 function ThreatGauge({ level }) {
-  const map = { CLEAR: 0, LOW: 20, MEDIUM: 50, HIGH: 75, CRITICAL: 100 };
+  const map = {
+    CLEAR: 0,
+    LOW: 20,
+    MEDIUM: 50,
+    HIGH: 75,
+    CRITICAL: 100,
+  };
   const colorMap = {
     CLEAR: "var(--qf-green)",
     LOW: "var(--sev-low)",
@@ -89,15 +105,22 @@ function ThreatGauge({ level }) {
   const color = colorMap[level] ?? "var(--qf-green)";
   const r = 56;
   const circ = 2 * Math.PI * r;
-
   return (
-    <div style={{ textAlign: "center", padding: "8px 0" }}>
+    <div
+      style={{
+        textAlign: "center",
+        padding: "8px 0",
+      }}
+    >
       <svg
         width={140}
         height={140}
-        style={{ display: "block", margin: "0 auto" }}
+        style={{
+          display: "block",
+          margin: "0 auto",
+        }}
       >
-        {/* Track */}
+        {}
         <circle
           cx={70}
           cy={70}
@@ -106,7 +129,7 @@ function ThreatGauge({ level }) {
           stroke="var(--qf-border)"
           strokeWidth={8}
         />
-        {/* Progress */}
+        {}
         <circle
           cx={70}
           cy={70}
@@ -118,7 +141,9 @@ function ThreatGauge({ level }) {
           strokeDashoffset={circ * (1 - pct / 100)}
           strokeLinecap="round"
           transform="rotate(-90 70 70)"
-          style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s" }}
+          style={{
+            transition: "stroke-dashoffset 1s ease, stroke 0.5s",
+          }}
         />
         <text
           x={70}
@@ -145,8 +170,6 @@ function ThreatGauge({ level }) {
     </div>
   );
 }
-
-// ── Recent Alert Row ─────────────────────────────────────────────────────────
 function AlertRow({ alert }) {
   const sev = alert.severity?.toLowerCase();
   const colors = {
@@ -156,7 +179,6 @@ function AlertRow({ alert }) {
     low: "var(--sev-low)",
   };
   const color = colors[sev] || "var(--qf-text-muted)";
-
   return (
     <div
       style={{
@@ -178,7 +200,12 @@ function AlertRow({ alert }) {
           marginTop: 3,
         }}
       />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         <div
           style={{
             fontSize: 13,
@@ -199,7 +226,7 @@ function AlertRow({ alert }) {
               lineHeight: 1.3,
             }}
           >
-            🤖 {alert.ai_summary.slice(0, 70)}
+            AI: {alert.ai_summary.slice(0, 70)}
             {alert.ai_summary.length > 70 ? "…" : ""}
           </div>
         )}
@@ -219,8 +246,6 @@ function AlertRow({ alert }) {
     </div>
   );
 }
-
-// ── Live Event Row ────────────────────────────────────────────────────────────
 function EventRow({ ev }) {
   return (
     <div
@@ -234,11 +259,21 @@ function EventRow({ ev }) {
       }}
     >
       <span
-        style={{ color: ev.color, flexShrink: 0, fontSize: 13, marginTop: 1 }}
+        style={{
+          color: ev.color,
+          flexShrink: 0,
+          fontSize: 13,
+          marginTop: 1,
+        }}
       >
         {ev.icon}
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         <div
           style={{
             fontSize: 11,
@@ -265,59 +300,59 @@ function EventRow({ ev }) {
     </div>
   );
 }
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [recentAlerts, setRecentAlerts] = useState([]);
   const [systemHealth, setSystemHealth] = useState(null);
+  const [modelStatus, setModelStatus] = useState(null);
   const [liveEvents, setLiveEvents] = useState([]);
   const [clock, setClock] = useState(new Date());
-
   const { latestAlert, latestDetection, latestDrone, connected } =
     useWebSocket();
-
-  // Clock
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-
-  // Load analytics
   const loadData = useCallback(async () => {
     try {
-      const [ov, al, health] = await Promise.all([
+      const [ov, al, health, models] = await Promise.all([
         analyticsApi.overview(),
-        alertApi.list({ limit: 6, status: "active" }),
+        alertApi.list({
+          limit: 6,
+          status: "active",
+        }),
         systemApi.health().catch(() => null),
+        modelApi.status().catch(() => null),
       ]);
       setOverview(ov.data);
       setRecentAlerts(al.data);
       if (health) setSystemHealth(health.data);
+      setModelStatus(models ? models.data : null);
     } catch (e) {
       console.error("Dashboard load error:", e);
     }
   }, []);
-
   useEffect(() => {
     loadData();
     const t = setInterval(loadData, 15000);
     return () => clearInterval(t);
   }, [loadData]);
-
-  // Push WS events into live feed
   const pushEvent = useCallback((icon, color, msg) => {
     setLiveEvents((prev) => [
-      { id: Date.now() + Math.random(), icon, color, msg, time: new Date() },
+      {
+        id: Date.now() + Math.random(),
+        icon,
+        color,
+        msg,
+        time: new Date(),
+      },
       ...prev.slice(0, 24),
     ]);
   }, []);
-
   useEffect(() => {
     if (latestAlert)
-      pushEvent("⚠", "var(--qf-red)", latestAlert.title || "Security alert");
+      pushEvent("!", "var(--qf-red)", latestAlert.title || "Security alert");
   }, [latestAlert, pushEvent]);
-
   useEffect(() => {
     if (latestDrone)
       pushEvent(
@@ -326,7 +361,6 @@ export default function Dashboard() {
         `Drone detected · CAM ${latestDrone.camera_id} · ${latestDrone.threat_level?.toUpperCase()}`,
       );
   }, [latestDrone, pushEvent]);
-
   useEffect(() => {
     if (latestDetection) {
       const det = latestDetection.detections?.[0];
@@ -338,16 +372,18 @@ export default function Dashboard() {
         );
     }
   }, [latestDetection, pushEvent]);
-
   const ov = overview;
   const threatLevel = ov?.threat_level || "CLEAR";
   const aiModels = systemHealth?.components?.ai_models || "unknown";
   const activeCams =
     systemHealth?.components?.active_cameras ?? ov?.cameras?.online ?? "-";
-
   return (
-    <div style={{ padding: 28 }}>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+    <div
+      style={{
+        padding: 28,
+      }}
+    >
+      {}
       <div
         style={{
           display: "flex",
@@ -378,8 +414,30 @@ export default function Dashboard() {
           >
             {clock.toUTCString().replace("GMT", "UTC")}
           </div>
+          {modelStatus && (
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                color: "var(--qf-text-muted)",
+                marginTop: 4,
+              }}
+            >
+              MODEL {String(modelStatus.device).toUpperCase()} · DRONE MODE{" "}
+              {String(modelStatus.drone_mode).toUpperCase()}
+              {modelStatus.metrics?.timings?.inference
+                ? ` · ${modelStatus.metrics.timings.inference.avg_ms.toFixed(1)} MS/FRAME`
+                : ""}
+            </div>
+          )}
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
           <span
             className={`badge ${connected ? "badge-low" : "badge-critical"}`}
           >
@@ -393,7 +451,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Top Stats ──────────────────────────────────────────────────────── */}
+      {}
       <div
         style={{
           display: "grid",
@@ -410,7 +468,7 @@ export default function Dashboard() {
           sub={`of ${ov?.cameras?.total ?? 0} configured`}
         />
         <StatCard
-          icon="⚠"
+          icon="!"
           label="ACTIVE ALERTS"
           color="var(--qf-orange)"
           value={ov?.alerts_24h ?? "-"}
@@ -433,7 +491,7 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ── Middle Row ─────────────────────────────────────────────────────── */}
+      {}
       <div
         style={{
           display: "grid",
@@ -442,7 +500,7 @@ export default function Dashboard() {
           marginBottom: 20,
         }}
       >
-        {/* Threat gauge */}
+        {}
         <div
           className="qf-card"
           style={{
@@ -454,7 +512,11 @@ export default function Dashboard() {
           }}
         >
           <ThreatGauge level={threatLevel} />
-          <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              textAlign: "center",
+            }}
+          >
             <div
               style={{
                 fontFamily: "var(--font-mono)",
@@ -478,8 +540,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Active alerts panel */}
-        <div className="qf-card" style={{ overflow: "hidden" }}>
+        {}
+        <div
+          className="qf-card"
+          style={{
+            overflow: "hidden",
+          }}
+        >
           <div
             style={{
               fontFamily: "var(--font-mono)",
@@ -501,10 +568,15 @@ export default function Dashboard() {
                 fontSize: 12,
               }}
             >
-              ✓ NO ACTIVE THREATS
+              NO ACTIVE THREATS
             </div>
           ) : (
-            <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            <div
+              style={{
+                maxHeight: 240,
+                overflowY: "auto",
+              }}
+            >
               {recentAlerts.map((a) => (
                 <AlertRow key={a.id} alert={a} />
               ))}
@@ -512,8 +584,13 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Live event stream */}
-        <div className="qf-card" style={{ overflow: "hidden" }}>
+        {}
+        <div
+          className="qf-card"
+          style={{
+            overflow: "hidden",
+          }}
+        >
           <div
             style={{
               fontFamily: "var(--font-mono)",
@@ -525,7 +602,12 @@ export default function Dashboard() {
           >
             LIVE EVENT STREAM
           </div>
-          <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          <div
+            style={{
+              maxHeight: 260,
+              overflowY: "auto",
+            }}
+          >
             {liveEvents.length === 0 ? (
               <div
                 style={{
@@ -543,7 +625,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Camera Network ─────────────────────────────────────────────────── */}
+      {}
       <div className="qf-card">
         <div
           style={{
@@ -557,36 +639,47 @@ export default function Dashboard() {
           CAMERA NETWORK STATUS
         </div>
         {ov?.cameras?.total > 0 ? (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {Array.from({ length: ov.cameras.total }, (_, i) => {
-              const isOnline = i < ov.cameras.online;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    padding: "7px 14px",
-                    background: isOnline
-                      ? "var(--qf-green-dim)"
-                      : "var(--qf-bg-surface)",
-                    border: `1px solid ${isOnline ? "var(--qf-green)" : "var(--qf-border)"}`,
-                    borderRadius: 6,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    color: isOnline
-                      ? "var(--qf-green)"
-                      : "var(--qf-text-muted)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <span
-                    className={`status-dot ${isOnline ? "status-online" : "status-offline"}`}
-                  />
-                  CAM {String(i + 1).padStart(2, "0")}
-                </div>
-              );
-            })}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            {Array.from(
+              {
+                length: ov.cameras.total,
+              },
+              (_, i) => {
+                const isOnline = i < ov.cameras.online;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "7px 14px",
+                      background: isOnline
+                        ? "var(--qf-green-dim)"
+                        : "var(--qf-bg-surface)",
+                      border: `1px solid ${isOnline ? "var(--qf-green)" : "var(--qf-border)"}`,
+                      borderRadius: 6,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      color: isOnline
+                        ? "var(--qf-green)"
+                        : "var(--qf-text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      className={`status-dot ${isOnline ? "status-online" : "status-offline"}`}
+                    />
+                    CAM {String(i + 1).padStart(2, "0")}
+                  </div>
+                );
+              },
+            )}
           </div>
         ) : (
           <div
@@ -597,7 +690,12 @@ export default function Dashboard() {
             }}
           >
             No cameras configured. Go to{" "}
-            <a href="/cameras" style={{ color: "var(--qf-cyan)" }}>
+            <a
+              href="/cameras"
+              style={{
+                color: "var(--qf-cyan)",
+              }}
+            >
               Camera Network
             </a>{" "}
             to add your first camera.

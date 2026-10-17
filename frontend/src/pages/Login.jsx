@@ -97,7 +97,7 @@ export default function Login() {
               boxShadow: "0 0 40px var(--qf-cyan-dim)",
             }}
           >
-            ⚡
+            ◈
           </div>
           <div
             style={{
@@ -212,7 +212,7 @@ export default function Login() {
                   color: "var(--qf-red)",
                 }}
               >
-                ⚠ {error}
+                {error}
               </div>
             )}
 

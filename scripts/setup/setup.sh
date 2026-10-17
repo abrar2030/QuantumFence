@@ -37,9 +37,9 @@ echo ""
 }
 
 log()    { echo -e "${CYAN}[QF]${NC} $*"; }
-success(){ echo -e "${GREEN}[✓]${NC} $*"; }
+success(){ echo -e "${GREEN}[ok]${NC} $*"; }
 warn()   { echo -e "${YELLOW}[!]${NC} $*"; }
-error()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+error()  { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 check_requirements() {
     log "Checking system requirements..."
@@ -93,7 +93,7 @@ ENVEOF
     fi
 
     # Create directories
-    mkdir -p snapshots recordings logs ai_models/weights
+    mkdir -p snapshots recordings logs ../ai_models/weights
     success "Backend directories created"
 }
 
@@ -149,8 +149,14 @@ PYEOF
 
 setup_docker() {
     log "Setting up Docker environment..."
-    command -v docker      >/dev/null 2>&1 || error "Docker is required for --docker mode"
-    command -v docker-compose >/dev/null 2>&1 || error "docker-compose is required"
+    command -v docker >/dev/null 2>&1 || error "Docker is required for --docker mode"
+    if docker compose version >/dev/null 2>&1; then
+        COMPOSE="docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        COMPOSE="docker-compose"
+    else
+        error "Docker Compose is required for --docker mode"
+    fi
 
     cd "$QF_ROOT/infrastructure/docker"
     if [ ! -f ".env" ]; then
@@ -158,23 +164,24 @@ setup_docker() {
 SECRET_KEY=change-this-docker-secret-key
 ANTHROPIC_API_KEY=
 GOOGLE_MAPS_API_KEY=
+POSTGRES_PASSWORD=qfpass
 REDIS_PASSWORD=qfredis
 GRAFANA_PASSWORD=qfgrafana
 ENVEOF
     fi
-    docker-compose build --no-cache
+    $COMPOSE build
     success "Docker images built"
 }
 
 print_summary() {
     echo ""
     echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  ✓ QuantumFence Setup Complete!${NC}"
+    echo -e "${GREEN}  QuantumFence Setup Complete!${NC}"
     echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${BOLD}Start the system:${NC}"
     if [ "$MODE" = "--docker" ]; then
-        echo -e "    ${CYAN}cd infrastructure/docker && docker-compose up -d${NC}"
+        echo -e "    ${CYAN}cd infrastructure/docker && docker compose up -d${NC}"
     else
         echo -e "    ${CYAN}bash scripts/deployment/start.sh${NC}"
     fi
@@ -187,8 +194,8 @@ print_summary() {
     echo -e "  ${BOLD}Default Login:${NC}"
     echo -e "    Username: ${CYAN}admin${NC}  Password: ${CYAN}quantumfence${NC}"
     echo ""
-    echo -e "  ${YELLOW}⚠  Update ANTHROPIC_API_KEY in code/backend/.env for AI features${NC}"
-    echo -e "  ${YELLOW}⚠  Update GOOGLE_MAPS_API_KEY for satellite map integration${NC}"
+    echo -e "  ${YELLOW} Update ANTHROPIC_API_KEY in code/backend/.env for AI features${NC}"
+    echo -e "  ${YELLOW} Update GOOGLE_MAPS_API_KEY for satellite map integration${NC}"
     echo ""
 }
 

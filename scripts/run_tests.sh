@@ -21,8 +21,8 @@ BACKEND_DIR="$QF_ROOT/code/backend"
 MODE="${1:-all}"
 
 log()    { echo -e "${CYAN}[TEST]${NC} $*"; }
-success(){ echo -e "${GREEN}[✓]${NC} $*"; }
-error()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+success(){ echo -e "${GREEN}[ok]${NC} $*"; }
+error()  { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 [[ -d "$BACKEND_DIR/venv" ]] || error "Run scripts/setup/setup.sh first."
 source "$BACKEND_DIR/venv/bin/activate"

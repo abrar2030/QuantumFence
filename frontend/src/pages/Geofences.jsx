@@ -164,7 +164,7 @@ function GeofenceModal({ geofence, onClose, onSave }) {
               fontSize: 20,
             }}
           >
-            ✕
+            ×
           </button>
         </div>
 
@@ -397,7 +397,7 @@ function GeofenceModal({ geofence, onClose, onSave }) {
                         opacity: form.points.length <= 3 ? 0.4 : 1,
                       }}
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 ))}
@@ -417,7 +417,7 @@ function GeofenceModal({ geofence, onClose, onSave }) {
                 color: "var(--qf-red)",
               }}
             >
-              ⚠ {error}
+              {error}
             </div>
           )}
 

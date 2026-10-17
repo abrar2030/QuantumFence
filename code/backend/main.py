@@ -1,11 +1,6 @@
-"""
-QuantumFence - Main FastAPI Application
-"""
-
 import os
 import sys
 
-# ── Ensure code/ and code/backend/ are both on the Python path ───────────────
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 _CODE_DIR = os.path.dirname(_BACKEND_DIR)
 for _p in (_CODE_DIR, _BACKEND_DIR):
@@ -16,16 +11,17 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from api.routes import alerts, analytics, auth, cameras, drones, geofences
+from api.routes import alerts, analytics, auth, cameras, drones, geofences, models
+from api.routes.auth import user_from_token
 from api.websocket import manager
 from config.settings import ensure_directories, settings
 from database.database import Base, SessionLocal, engine
 from database.models import Camera, CameraStatus
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from services.detection_service import DetectionService
+from services.detection_service import DetectionService, camera_runtime_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +33,6 @@ detection_service: DetectionService = None
 
 
 async def _start_active_cameras(ds: DetectionService) -> None:
-    """Load all active cameras from DB on startup and begin detection."""
     db = SessionLocal()
     try:
         active = (
@@ -47,15 +42,10 @@ async def _start_active_cameras(ds: DetectionService) -> None:
         )
         logger.info(f"Auto-starting {len(active)} active camera(s)...")
         for cam in active:
-            config = {
-                "detect_persons": cam.detect_persons,
-                "detect_vehicles": cam.detect_vehicles,
-                "detect_drones": cam.detect_drones,
-            }
             await ds.start_camera(
                 camera_id=cam.id,
                 stream_url=cam.stream_url or "simulated",
-                config=config,
+                config=camera_runtime_config(cam),
             )
     except Exception as e:
         logger.error(f"Error auto-starting cameras: {e}")
@@ -67,25 +57,22 @@ async def _start_active_cameras(ds: DetectionService) -> None:
 async def lifespan(app: FastAPI):
     global detection_service
 
-    logger.info("🚀 Starting QuantumFence...")
+    logger.info("Starting QuantumFence...")
 
     ensure_directories()
 
-    # Ensure DB schema
     Base.metadata.create_all(bind=engine)
 
-    # Init detection service + AI models
     detection_service = DetectionService()
     await detection_service.initialize()
     app.state.detection_service = detection_service
 
-    # Auto-start persisted cameras
     await _start_active_cameras(detection_service)
 
-    logger.info("✅ QuantumFence operational")
+    logger.info("QuantumFence operational")
     yield
 
-    logger.info("🛑 Shutting down QuantumFence...")
+    logger.info("Shutting down QuantumFence...")
     if detection_service:
         await detection_service.shutdown()
 
@@ -99,7 +86,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ─── Middleware ───────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -109,7 +95,6 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# ─── Static snapshot serving ─────────────────────────────────────────────────
 os.makedirs(settings.SNAPSHOTS_DIR, exist_ok=True)
 app.mount(
     "/snapshots",
@@ -117,18 +102,40 @@ app.mount(
     name="snapshots",
 )
 
-# ─── API Routers ──────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["Cameras"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(drones.router, prefix="/api/drones", tags=["Drone Detection"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(geofences.router, prefix="/api/geofences", tags=["Geofences"])
+app.include_router(models.router, prefix="/api/models", tags=["AI Models"])
+
+if settings.PROMETHEUS_ENABLED:
+    try:
+        from prometheus_fastapi_instrumentator import Instrumentator
+
+        Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(
+            app, endpoint="/metrics", include_in_schema=False
+        )
+    except ImportError:
+        logger.warning(
+            "prometheus_fastapi_instrumentator not installed, /metrics disabled"
+        )
 
 
-# ─── WebSocket ────────────────────────────────────────────────────────────────
 @app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+async def websocket_endpoint(
+    websocket: WebSocket, client_id: str, token: str = Query(default=None)
+):
+    auth_db = SessionLocal()
+    try:
+        user = user_from_token(token, auth_db)
+    finally:
+        auth_db.close()
+    if user is None:
+        await websocket.close(code=4401)
+        return
+
     await manager.connect(websocket, client_id)
     try:
         while True:
@@ -145,22 +152,38 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     {"type": "subscribed", "camera_id": cam_id}, websocket
                 )
 
+            elif event_type == "unsubscribe_camera":
+                cam_id = data.get("camera_id")
+                manager.unsubscribe_camera(client_id, str(cam_id))
+                await manager.send_personal_message(
+                    {"type": "unsubscribed", "camera_id": cam_id}, websocket
+                )
+
             elif event_type == "start_camera":
-                # Frontend-triggered camera start
                 ds = getattr(app.state, "detection_service", None)
-                if ds:
-                    await ds.start_camera(
-                        data.get("camera_id"),
-                        data.get("stream_url", "simulated"),
-                        data.get("config", {}),
-                    )
+                cam_id = data.get("camera_id")
+                if ds and isinstance(cam_id, int):
+                    db = SessionLocal()
+                    try:
+                        cam = db.query(Camera).filter(Camera.id == cam_id).first()
+                        params = (
+                            (cam.stream_url or "simulated", camera_runtime_config(cam))
+                            if cam and cam.is_active
+                            else None
+                        )
+                    finally:
+                        db.close()
+                    if params:
+                        await ds.start_camera(cam_id, params[0], params[1])
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, client_id)
         logger.info(f"WS client disconnected: {client_id}")
+    except Exception as e:
+        manager.disconnect(websocket, client_id)
+        logger.warning(f"WS client {client_id} closed after error: {e}")
 
 
-# ─── Health & Root ────────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
     return {
@@ -179,7 +202,7 @@ async def health():
         "version": "1.0.0",
         "components": {
             "database": "connected",
-            "ai_models": "loaded" if (ds and ds.model_manager) else "unavailable",
+            "ai_models": ds.model_health() if ds else "unavailable",
             "detection_service": "running" if ds else "stopped",
             "active_cameras": len(ds.camera_processors) if ds else 0,
         },

@@ -1,26 +1,15 @@
-"""
-Tests for GoogleEarthIntegration (integrations/google_earth.py).
-Covers KML generation, FOV polygon calculation, detection location
-estimation, static map URL generation, and map config endpoint.
-"""
-
 import math
 from datetime import datetime
 from xml.etree import ElementTree as ET
 
 import pytest
-
 from integrations.google_earth import GoogleEarthIntegration, ThreatMarker
 
 pytestmark = pytest.mark.unit
 
 
-# ─── Fixtures ─────────────────────────────────────────────────────────────────
-
-
 @pytest.fixture
 def geo(monkeypatch):
-    """Integration instance with no real API keys."""
     monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "")
     from config.settings import settings
 
@@ -92,21 +81,16 @@ SAMPLE_THREATS = [
 ]
 
 
-# ─── KML generation ───────────────────────────────────────────────────────────
-
-
 class TestKMLGeneration:
 
     def test_kml_is_valid_xml(self, geo):
         kml = geo.generate_kml(SAMPLE_CAMERAS, SAMPLE_GEOFENCES)
-        # Should not raise
         root = ET.fromstring(kml)
         assert root is not None
 
     def test_kml_root_tag_is_kml(self, geo):
         kml = geo.generate_kml(SAMPLE_CAMERAS, SAMPLE_GEOFENCES)
         root = ET.fromstring(kml)
-        # Tag may include namespace
         assert "kml" in root.tag.lower()
 
     def test_kml_contains_camera_names(self, geo):
@@ -124,7 +108,7 @@ class TestKMLGeneration:
 
     def test_kml_without_threats_still_valid(self, geo):
         kml = geo.generate_kml(SAMPLE_CAMERAS, SAMPLE_GEOFENCES, threats=None)
-        ET.fromstring(kml)  # valid XML
+        ET.fromstring(kml)
 
     def test_kml_contains_coordinates_for_cameras(self, geo):
         kml = geo.generate_kml(SAMPLE_CAMERAS, SAMPLE_GEOFENCES)
@@ -155,7 +139,6 @@ class TestKMLGeneration:
             }
         ]
         kml = geo.generate_kml(cams_no_coords, [])
-        # No Placemark for camera without coords
         root = ET.fromstring(kml)
         placemarks = root.findall(".//{http://www.opengis.net/kml/2.2}Placemark")
         names = [
@@ -164,9 +147,6 @@ class TestKMLGeneration:
             if p.find("{http://www.opengis.net/kml/2.2}name") is not None
         ]
         assert "No Location" not in names
-
-
-# ─── Camera FOV polygon ───────────────────────────────────────────────────────
 
 
 class TestCameraFOVPolygon:
@@ -180,7 +160,7 @@ class TestCameraFOVPolygon:
             range_meters=100.0,
         )
         assert isinstance(polygon, list)
-        assert len(polygon) >= 3  # at least: origin + 3 arc points + close
+        assert len(polygon) >= 3
         for point in polygon:
             assert len(point) == 2
             lat, lng = point
@@ -201,7 +181,6 @@ class TestCameraFOVPolygon:
         lat, lng = 33.6844, 73.0479
         narrow = geo.calculate_camera_fov_polygon(lat, lng, 0.0, 30.0, 100.0)
         wide = geo.calculate_camera_fov_polygon(lat, lng, 0.0, 120.0, 100.0)
-        # Collect lngs of right-side points
         narrow_max_lng = max(p[1] for p in narrow)
         wide_max_lng = max(p[1] for p in wide)
         assert wide_max_lng > narrow_max_lng
@@ -215,9 +194,6 @@ class TestCameraFOVPolygon:
             return max(math.sqrt((p[0] - lat) ** 2 + (p[1] - lng) ** 2) for p in poly)
 
         assert max_dist_from_origin(far) > max_dist_from_origin(close)
-
-
-# ─── Detection location estimation ───────────────────────────────────────────
 
 
 class TestDetectionLocationEstimation:
@@ -245,7 +221,6 @@ class TestDetectionLocationEstimation:
             bbox_center_y=0.5,
             estimated_range_m=100.0,
         )
-        # Should be within ~0.01 degrees of camera
         assert abs(lat - 33.6844) < 0.1
         assert abs(lng - 73.0479) < 0.1
 
@@ -256,22 +231,18 @@ class TestDetectionLocationEstimation:
         lat_right, lng_right = geo.estimate_detection_location(
             33.6844, 73.0479, 0.0, 90.0, 0.9, 0.5, 100.0
         )
-        # Different x positions → different longitudes
         assert lng_left != lng_right
 
     def test_high_in_frame_gives_farther_estimate(self, geo):
         lat_near, lng_near = geo.estimate_detection_location(
-            33.6844, 73.0479, 0.0, 90.0, 0.5, 0.9, 100.0  # low in frame
+            33.6844, 73.0479, 0.0, 90.0, 0.5, 0.9, 100.0
         )
         lat_far, lng_far = geo.estimate_detection_location(
-            33.6844, 73.0479, 0.0, 90.0, 0.5, 0.1, 100.0  # high in frame
+            33.6844, 73.0479, 0.0, 90.0, 0.5, 0.1, 100.0
         )
         dist_near = math.sqrt((lat_near - 33.6844) ** 2 + (lng_near - 73.0479) ** 2)
         dist_far = math.sqrt((lat_far - 33.6844) ** 2 + (lng_far - 73.0479) ** 2)
         assert dist_far > dist_near
-
-
-# ─── Static map URL generation ────────────────────────────────────────────────
 
 
 class TestStaticMapURL:
@@ -307,12 +278,8 @@ class TestStaticMapURL:
                 "status": "online",
             }
         ]
-        # Should not crash
         url = geo_with_key.generate_static_map_url(cams_no_coords)
         assert url != ""
-
-
-# ─── Map config ───────────────────────────────────────────────────────────────
 
 
 class TestGetMapConfig:
@@ -340,9 +307,6 @@ class TestGetMapConfig:
         assert config["center"]["lng"] == settings.DEFAULT_MAP_CENTER_LNG
 
 
-# ─── KML style helper ─────────────────────────────────────────────────────────
-
-
 class TestKMLStyleHelper:
 
     def test_style_element_contains_id(self, geo):
@@ -354,10 +318,8 @@ class TestKMLStyleHelper:
         assert "ffaabbcc" in style
 
     def test_geofence_kml_color_is_bbggrr_format(self, geo):
-        """KML uses AABBGGRR not AARRGGBB."""
         gf = {**SAMPLE_GEOFENCES[0], "color": "#FF4444"}
         kml = geo._geofence_to_kml(gf)
-        # #FF4444 → R=FF G=44 B=44 → KML fill: 80 44 44 FF
         assert "4444ff" in kml.lower()
 
     def test_geofence_to_kml_returns_string(self, geo):

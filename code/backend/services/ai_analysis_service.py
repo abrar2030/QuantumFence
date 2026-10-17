@@ -1,8 +1,3 @@
-"""
-QuantumFence - AI Threat Analysis Service
-Uses Anthropic Claude API to analyze detections and generate threat assessments.
-"""
-
 import json
 import logging
 from pathlib import Path
@@ -14,7 +9,6 @@ logger = logging.getLogger("quantumfence.ai_analysis")
 
 
 class AIAnalysisService:
-    """Leverages Claude AI to perform intelligent threat analysis."""
 
     def __init__(self):
         self._client = None
@@ -25,7 +19,6 @@ class AIAnalysisService:
 
     @property
     def client(self):
-        """Build the Anthropic client on first use, not at import time."""
         if self._client is None:
             try:
                 import anthropic
@@ -38,10 +31,7 @@ class AIAnalysisService:
 
     @client.setter
     def client(self, value):
-        """Allow tests to inject a mock client directly."""
         self._client = value
-
-    # ── Public analyse methods (all async) ──────────────────────────────────
 
     async def analyze_threat(
         self,
@@ -137,10 +127,7 @@ class AIAnalysisService:
             logger.error(f"Multi-threat analysis failed: {e}")
             return self._default_analysis("multiple_threats", 0.9)
 
-    # ── Internal helpers ─────────────────────────────────────────────────────
-
     def _call_api(self, messages: list) -> str:
-        """Blocking Anthropic API call - always run via asyncio.to_thread."""
         response = self.client.messages.create(
             model=self.model,
             max_tokens=1000,
@@ -207,19 +194,13 @@ class AIAnalysisService:
     def _parse_analysis_response(
         self, raw: str, detection_type: str, confidence: float
     ) -> Dict:
-        """
-        Strip all markdown fence variants before JSON parsing.
-        """
         try:
-            # Strip ```json ... ``` or ``` ... ```
             clean = raw.strip()
             if clean.startswith("```"):
                 clean = clean.split("```", 2)[-1] if clean.count("```") >= 2 else clean
-                # Remove leading language tag (json, JSON, etc.)
                 lines = clean.split("\n")
                 if lines and lines[0].strip().lower() in ("json", ""):
                     lines = lines[1:]
-                # Remove trailing fence
                 if lines and lines[-1].strip() == "```":
                     lines = lines[:-1]
                 clean = "\n".join(lines).strip()

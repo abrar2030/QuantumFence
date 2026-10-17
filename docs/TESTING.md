@@ -26,9 +26,10 @@ code/tests/
 │   │   ├── test_detection_service.py       # Camera lifecycle, DB writes, alert creation
 │   │   └── test_notification_service.py    # Email/webhook dispatch, severity filtering
 │   └── test_settings_and_edge_cases.py     # Config validation, parametrized edge cases
-├── ai_models/
-│   ├── test_drone_detector.py              # DroneTrack, multi-object tracking, swarm
-│   └── test_model_manager.py               # YOLOv8 pipeline, bbox parsing, drone filter
+├── ai_models/                              # code/ai_models/tests
+│   ├── unit/                               # types, config, detectors, preprocessing,
+│   │                                       # tracking, analysis, manager, support modules
+│   └── integration/test_pipeline.py        # end to end tracking, swarm, loitering
 └── integrations/
     └── test_google_earth.py                # KML generation, FOV polygon, location estimate
 ```
@@ -71,7 +72,7 @@ pip install -r code/backend/requirements-test.txt
 pytest code/tests/
 
 # Specific file
-pytest code/tests/ai_models/test_drone_detector.py -v
+pytest code/ai_models/tests/unit/test_tracking.py -v
 
 # Specific class or function
 pytest code/tests/backend/api/test_auth.py::TestLoginEndpoint -v
@@ -134,15 +135,13 @@ def test_alert_creation(client, auth_headers, make_camera, make_alert):
 
 ### AI Model Mocking
 
-No GPU or real model weights are needed. `MockYOLOModel` is always used in tests:
+No GPU or real model weights are needed. The tests inject a fake model factory into `ModelManager`:
 
 ```python
 @pytest.fixture
-def manager():
-    m = ModelManager()
-    m.yolo_model  = MockYOLOModel(detection_type="person")
-    m.drone_model = MockYOLOModel(detection_type="drone")
-    m._models_loaded = True
+def manager(config, fake_yolo_factory):
+    m = ModelManager(config, model_factory=fake_yolo_factory([(10, 10, 50, 90, 0.9, 0)]))
+    m.load()
     return m
 ```
 
@@ -203,18 +202,21 @@ class TestMyRoute:
 ### 2. New AI model method
 
 ```python
-# code/tests/ai_models/test_my_model.py
-import pytest
+# code/ai_models/tests/unit/test_my_model.py
 import numpy as np
+import pytest
+
 pytestmark = pytest.mark.unit
 
+
 class TestMyModel:
-    def test_returns_expected_format(self):
-        from ai_models.model_manager import ModelManager
-        m     = ModelManager()
+    def test_returns_expected_format(self, config, fake_yolo_factory):
+        from ai_models import ModelManager
+
+        m = ModelManager(config, model_factory=fake_yolo_factory([]))
+        m.load()
         frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-        result = m.my_new_method(frame)
-        assert isinstance(result, list)
+        assert m.detect_persons(frame) == []
 ```
 
 ### 3. New service method

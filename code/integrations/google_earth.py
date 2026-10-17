@@ -1,7 +1,3 @@
-"""
-QuantumFence - Google Earth & Maps Integration
-"""
-
 import logging
 import math
 from dataclasses import dataclass
@@ -33,7 +29,6 @@ class ThreatMarker:
 
 
 class GoogleEarthIntegration:
-    """Integrates QuantumFence with Google Maps/Earth APIs."""
 
     MAPS_STATIC_URL = "https://maps.googleapis.com/maps/api/staticmap"
     GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -54,7 +49,6 @@ class GoogleEarthIntegration:
         if not self.api_key:
             return self._generate_osm_url()
 
-        # Build params, then encode markers as repeated params
         parts = [
             f"center={self.center_lat},{self.center_lng}",
             f"zoom={zoom}",
@@ -167,19 +161,15 @@ class GoogleEarthIntegration:
         coords = geofence.get("coordinates", [])
         if not coords:
             return ""
-        # Convert #RRGGBB to KML's AABBGGRR order
         hex_color = geofence.get("color", "#FF4444").lstrip("#")
         if len(hex_color) == 6:
             r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
-            # KML fill: 50% opacity → 80BBGGRR
             kml_fill = f"80{b}{g}{r}"
-            # KML line: full opacity → FFBBGGRR
             kml_line = f"ff{b}{g}{r}"
         else:
             kml_fill = "80FF4444"
             kml_line = "ffFF4444"
 
-        # coords = [[lng, lat], ...]
         coord_str = " ".join(f"{c[0]},{c[1]},0" for c in coords)
         name = self._xml_escape(geofence.get("name", "Geofence"))
         desc = self._xml_escape(geofence.get("description", ""))
@@ -226,7 +216,7 @@ class GoogleEarthIntegration:
             )
             polygon.append((math.degrees(dest_lat_r), math.degrees(dest_lng_r)))
 
-        polygon.append((lat, lng))  # close ring
+        polygon.append((lat, lng))
         return polygon
 
     def estimate_detection_location(
@@ -235,11 +225,10 @@ class GoogleEarthIntegration:
         camera_lng: float,
         camera_direction: float,
         camera_fov: float,
-        bbox_center_x: float,  # 0.0 – 1.0
-        bbox_center_y: float,  # 0.0 – 1.0
+        bbox_center_x: float,
+        bbox_center_y: float,
         estimated_range_m: float = 50.0,
     ) -> Tuple[float, float]:
-        """Protect against zero fov or zero range."""
         if camera_fov <= 0:
             camera_fov = 90.0
         if estimated_range_m <= 0:
@@ -247,7 +236,6 @@ class GoogleEarthIntegration:
 
         angle_offset = (bbox_center_x - 0.5) * camera_fov
         bearing = camera_direction + angle_offset
-        # Higher in frame → farther away
         range_m = estimated_range_m * max(0.5, 1.0 + (0.5 - bbox_center_y))
 
         R = 6_371_000
@@ -278,7 +266,6 @@ class GoogleEarthIntegration:
 
     @staticmethod
     def _xml_escape(text: str) -> str:
-        """Escape special characters for XML/KML content."""
         return (
             text.replace("&", "&amp;")
             .replace("<", "&lt;")

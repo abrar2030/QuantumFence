@@ -1,7 +1,3 @@
-"""
-QuantumFence - Analytics Routes
-"""
-
 from datetime import datetime, timedelta, timezone
 
 from api.routes.auth import User, get_current_user
@@ -15,7 +11,7 @@ from database.models import (
     Detection,
     DroneDetection,
 )
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -74,7 +70,7 @@ async def get_overview(
 
 @router.get("/detections/timeline")
 async def detections_timeline(
-    days: int = 7,
+    days: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -97,7 +93,7 @@ async def detections_timeline(
 
 @router.get("/alerts/by-type")
 async def alerts_by_type(
-    days: int = 7,
+    days: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

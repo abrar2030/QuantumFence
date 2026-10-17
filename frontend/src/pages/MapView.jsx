@@ -139,7 +139,7 @@ export default function MapView() {
           background:${col}33;border:2px solid ${col};
           display:flex;align-items:center;justify-content:center;
           font-size:10px;color:${col};
-        ">⚠</div>`,
+        ">!</div>`,
         className: "",
         iconSize: [22, 22],
         iconAnchor: [11, 11],
@@ -236,7 +236,7 @@ export default function MapView() {
           }}
         >
           <span>◉ CAMERA</span>
-          <span style={{ color: "var(--qf-red)" }}>⚠ ALERT</span>
+          <span style={{ color: "var(--qf-red)" }}>ALERT</span>
           <span
             style={{
               color: "var(--qf-cyan)",
@@ -295,7 +295,7 @@ export default function MapView() {
                   fontSize: 18,
                 }}
               >
-                ✕
+                ×
               </button>
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>

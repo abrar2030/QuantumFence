@@ -1,18 +1,13 @@
 import axios from "axios";
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
   timeout: 15000,
 });
-
-// Attach token on every request
 api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem("qf_token");
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
 });
-
-// Handle 401 globally
 api.interceptors.response.use(
   (r) => r,
   (err) => {
@@ -23,12 +18,12 @@ api.interceptors.response.use(
     return Promise.reject(err);
   },
 );
-
 export default api;
-
-// ── Camera API ───────────────────────────────────────────────────────────────
 export const cameraApi = {
-  list: (params) => api.get("/cameras", { params }),
+  list: (params) =>
+    api.get("/cameras", {
+      params,
+    }),
   get: (id) => api.get(`/cameras/${id}`),
   create: (data) => api.post("/cameras", data),
   update: (id, d) => api.put(`/cameras/${id}`, d),
@@ -36,13 +31,13 @@ export const cameraApi = {
   enable: (id) => api.post(`/cameras/${id}/enable`),
   disable: (id) => api.post(`/cameras/${id}/disable`),
   stats: (id) => api.get(`/cameras/${id}/stats`),
-  // Returns image blob - call via fetch with auth header (see Cameras.jsx StatsModal)
   snapshotUrl: (id) => `${api.defaults.baseURL}/cameras/${id}/snapshot`,
 };
-
-// ── Alert API ────────────────────────────────────────────────────────────────
 export const alertApi = {
-  list: (params) => api.get("/alerts", { params }),
+  list: (params) =>
+    api.get("/alerts", {
+      params,
+    }),
   get: (id) => api.get(`/alerts/${id}`),
   stats: () => api.get("/alerts/stats"),
   acknowledge: (id) => api.post(`/alerts/${id}/acknowledge`),
@@ -50,26 +45,38 @@ export const alertApi = {
   update: (id, d) => api.put(`/alerts/${id}`, d),
   delete: (id) => api.delete(`/alerts/${id}`),
 };
-
-// ── Drone API ────────────────────────────────────────────────────────────────
 export const droneApi = {
-  list: (params) => api.get("/drones", { params }),
+  list: (params) =>
+    api.get("/drones", {
+      params,
+    }),
   active: () => api.get("/drones/active"),
   stats: () => api.get("/drones/stats"),
+  tracks: () => api.get("/drones/tracks"),
 };
-
-// ── Analytics API ────────────────────────────────────────────────────────────
+export const modelApi = {
+  status: () => api.get("/models/status"),
+  metrics: () => api.get("/models/metrics"),
+  config: () => api.get("/models/config"),
+  reload: () => api.post("/models/reload"),
+};
 export const analyticsApi = {
   overview: () => api.get("/analytics/overview"),
   detectionsTimeline: (days) =>
-    api.get("/analytics/detections/timeline", { params: { days } }),
+    api.get("/analytics/detections/timeline", {
+      params: {
+        days,
+      },
+    }),
   alertsByType: (days) =>
-    api.get("/analytics/alerts/by-type", { params: { days } }),
+    api.get("/analytics/alerts/by-type", {
+      params: {
+        days,
+      },
+    }),
   heatmap: () => api.get("/analytics/heatmap"),
   cameraPerformance: () => api.get("/analytics/cameras/performance"),
 };
-
-// ── Geofence API ─────────────────────────────────────────────────────────────
 export const geofenceApi = {
   list: () => api.get("/geofences"),
   get: (id) => api.get(`/geofences/${id}`),
@@ -77,17 +84,22 @@ export const geofenceApi = {
   update: (id, d) => api.put(`/geofences/${id}`, d),
   delete: (id) => api.delete(`/geofences/${id}`),
   checkPoint: (id, lat, lng) =>
-    api.post(`/geofences/${id}/check-point`, null, { params: { lat, lng } }),
+    api.post(`/geofences/${id}/check-point`, null, {
+      params: {
+        lat,
+        lng,
+      },
+    }),
 };
-
-// ── Auth API ─────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (username, password) => {
     const form = new FormData();
     form.append("username", username);
     form.append("password", password);
     return api.post("/auth/login", form, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     });
   },
   register: (data) => api.post("/auth/register", data),
@@ -99,13 +111,14 @@ export const authApi = {
       new_password: newPassword,
     }),
   refresh: (token) =>
-    api.post("/auth/refresh", null, { params: { refresh_token: token } }),
-  // Admin-only
+    api.post("/auth/refresh", null, {
+      params: {
+        refresh_token: token,
+      },
+    }),
   listUsers: () => api.get("/auth/users"),
   updateUser: (id, data) => api.patch(`/auth/users/${id}`, data),
 };
-
-// ── System API ───────────────────────────────────────────────────────────────
 export const systemApi = {
   health: () =>
     axios.get(

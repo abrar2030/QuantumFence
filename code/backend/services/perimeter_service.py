@@ -1,7 +1,3 @@
-"""
-QuantumFence - Perimeter Intelligence Service
-"""
-
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -11,10 +7,6 @@ logger = logging.getLogger("quantumfence.perimeter")
 
 
 class PerimeterService:
-    """
-    Intelligent perimeter monitoring service.
-    Coordinates are stored as [lng, lat] (GeoJSON convention).
-    """
 
     def __init__(self):
         self._breach_cooldowns: Dict[str, datetime] = {}
@@ -47,7 +39,6 @@ class PerimeterService:
                     detection_lat, detection_lng, gf.get("coordinates", [])
                 )
 
-            # Check buffer zone when outside polygon
             buffer = gf.get("buffer_meters", 10.0)
             if not is_inside and buffer > 0:
                 is_inside = self._is_within_buffer(
@@ -91,7 +82,6 @@ class PerimeterService:
 
         self._loitering_tracker[key].append(now)
 
-        # Prune entries older than 2× the threshold
         cutoff = now - timedelta(seconds=loiter_threshold_seconds * 2)
         self._loitering_tracker[key] = [
             t for t in self._loitering_tracker[key] if t > cutoff
@@ -108,7 +98,6 @@ class PerimeterService:
         positions: List[Tuple[float, float]],
         fence_coordinates: List[List[float]],
     ) -> Dict:
-        """Guard against empty fence_coordinates."""
         if len(positions) < 3:
             return {
                 "approaching": False,
@@ -181,19 +170,11 @@ class PerimeterService:
         return self._haversine_distance(lat, lng, center_lat, center_lng) <= radius_m
 
     def _point_in_polygon(self, lat: float, lng: float, coords: List) -> bool:
-        """
-        Ray-casting algorithm.
-        Coordinates stored as [lng, lat] pairs (GeoJSON convention).
-        Uses explicit index access and guards against an empty list.
-        """
         if not coords or len(coords) < 3:
             return False
-        # GeoJSON stores [lng, lat] - we need lat/lng for the test
-        # detection point: (lat, lng)
         x, y = lng, lat
         n = len(coords)
         inside = False
-        # coords[i] = [lng_i, lat_i]
         p1x, p1y = float(coords[0][0]), float(coords[0][1])
         for i in range(1, n + 1):
             p2x, p2y = float(coords[i % n][0]), float(coords[i % n][1])
@@ -215,10 +196,6 @@ class PerimeterService:
         return self._distance_to_polygon(lat, lng, coords) <= buffer_m
 
     def _distance_to_polygon(self, lat: float, lng: float, coords: List) -> float:
-        """
-        Coordinates are stored as [lng, lat], but haversine expects
-        (lat1, lng1, lat2, lng2), so vertex lat = coord[1], vertex lng = coord[0].
-        """
         if not coords:
             return float("inf")
         return min(
@@ -228,7 +205,7 @@ class PerimeterService:
     def _haversine_distance(
         self, lat1: float, lng1: float, lat2: float, lng2: float
     ) -> float:
-        R = 6_371_000  # metres
+        R = 6_371_000
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         dphi = math.radians(lat2 - lat1)

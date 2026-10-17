@@ -1,7 +1,3 @@
-"""
-QuantumFence - Notification Service
-"""
-
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -13,23 +9,20 @@ from typing import List, Optional
 
 from config.settings import settings
 
-# Module-level optional imports - tests patch these as module attributes.
-# Both are gracefully absent at runtime if not installed.
 try:
     import aiohttp
 except ImportError:
-    aiohttp = None  # type: ignore
+    aiohttp = None
 
 try:
     import aiosmtplib
 except ImportError:
-    aiosmtplib = None  # type: ignore
+    aiosmtplib = None
 
 logger = logging.getLogger("quantumfence.notifications")
 
 
 class NotificationService:
-    """Handles all outbound notifications for security alerts."""
 
     def __init__(self):
         self.email_enabled = all(
@@ -120,12 +113,12 @@ class NotificationService:
                 else ""
             )
             ai_html = (
-                f"<div class='ai-box'><strong>🤖 AI Analysis:</strong><br/>{ai_summary}</div>"
+                f"<div class='ai-box'><strong>AI Analysis:</strong><br/>{ai_summary}</div>"
                 if ai_summary
                 else ""
             )
             act_html = (
-                f"<div class='action-box'><strong>⚡ Action:</strong><br/>{recommended_action}</div>"
+                f"<div class='action-box'><strong>Action:</strong><br/>{recommended_action}</div>"
                 if recommended_action
                 else ""
             )
@@ -150,7 +143,7 @@ body{{font-family:'Segoe UI',sans-serif;background:#0a0a1a;color:#e0e0e0;margin:
           text-align:center;font-size:12px;color:#4b5563}}
 </style></head><body><div class="container">
 <div class="header">
-  <div class="logo">⚡ QUANTUMFENCE</div>
+  <div class="logo">QUANTUMFENCE</div>
   <div style="margin-top:12px">
     <span class="badge">{severity}</span>
     <span style="margin-left:12px;font-size:18px;font-weight:600">{title}</span>

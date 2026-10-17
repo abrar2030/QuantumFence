@@ -142,7 +142,7 @@ export default function SignUp() {
               boxShadow: "0 0 40px var(--qf-cyan-dim)",
             }}
           >
-            ⚡
+            ◈
           </div>
           <div
             style={{
@@ -287,7 +287,7 @@ export default function SignUp() {
                   color: "var(--qf-red)",
                 }}
               >
-                ⚠ {error}
+                {error}
               </div>
             )}
 

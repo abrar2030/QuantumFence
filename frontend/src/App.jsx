@@ -85,7 +85,7 @@ function SplashScreen() {
             fontSize: 20,
           }}
         >
-          ⚡
+          ◈
         </div>
       </div>
       <div

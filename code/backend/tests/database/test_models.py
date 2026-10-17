@@ -1,8 +1,3 @@
-"""
-Tests for SQLAlchemy ORM models.
-Covers field defaults, constraints, relationships, and enum correctness.
-"""
-
 from datetime import datetime, timezone
 
 import pytest
@@ -25,9 +20,6 @@ from database.models import (
 from sqlalchemy.exc import IntegrityError
 
 pytestmark = pytest.mark.integration
-
-
-# ─── User ────────────────────────────────────────────────────────────────────
 
 
 class TestUserModel:
@@ -92,9 +84,6 @@ class TestUserModel:
         assert roles == {"admin", "operator", "viewer"}
 
 
-# ─── Camera ──────────────────────────────────────────────────────────────────
-
-
 class TestCameraModel:
 
     def test_create_minimal_camera(self, db_session):
@@ -135,9 +124,6 @@ class TestCameraModel:
             db_session.commit()
             db_session.refresh(cam)
             assert cam.status == new_status
-
-
-# ─── Alert ───────────────────────────────────────────────────────────────────
 
 
 class TestAlertModel:
@@ -205,9 +191,6 @@ class TestAlertModel:
         assert alert.resolved_at is not None
 
 
-# ─── DroneDetection ──────────────────────────────────────────────────────────
-
-
 class TestDroneDetectionModel:
 
     def test_create_drone_detection(self, db_session, make_camera):
@@ -235,9 +218,6 @@ class TestDroneDetectionModel:
     def test_all_threat_levels_valid(self):
         levels = {t.value for t in ThreatLevel}
         assert levels == {"clear", "caution", "warning", "threat", "critical"}
-
-
-# ─── Geofence ────────────────────────────────────────────────────────────────
 
 
 class TestGeofenceModel:
@@ -271,9 +251,6 @@ class TestGeofenceModel:
         db_session.commit()
         db_session.refresh(gf)
         assert gf.is_active is True
-
-
-# ─── Detection ───────────────────────────────────────────────────────────────
 
 
 class TestDetectionModel:

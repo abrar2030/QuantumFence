@@ -1,18 +1,9 @@
-"""
-Tests for NotificationService (services/notification_service.py).
-Covers webhook registration, severity filtering, payload construction,
-and error handling - all without real network calls.
-"""
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from services.notification_service import NotificationService
 
 pytestmark = pytest.mark.unit
-
-
-# ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -29,9 +20,6 @@ def svc_email_enabled(monkeypatch):
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "pass")
     monkeypatch.setattr(settings, "ALERT_EMAIL_RECIPIENTS", ["sec@test.com"])
     return NotificationService()
-
-
-# ─── Webhook registration ─────────────────────────────────────────────────────
 
 
 class TestWebhookRegistration:
@@ -55,9 +43,6 @@ class TestWebhookRegistration:
         assert svc._webhook_urls == []
 
 
-# ─── Email enabled check ──────────────────────────────────────────────────────
-
-
 class TestEmailEnabledFlag:
 
     def test_email_disabled_by_default(self, svc):
@@ -65,9 +50,6 @@ class TestEmailEnabledFlag:
 
     def test_email_enabled_when_all_settings_present(self, svc_email_enabled):
         assert svc_email_enabled.email_enabled is True
-
-
-# ─── Webhook sending ─────────────────────────────────────────────────────────
 
 
 class TestWebhookSending:
@@ -102,9 +84,7 @@ class TestWebhookSending:
 
         mock_session.post.assert_called_once()
         call_kwargs = mock_session.post.call_args
-        # Check URL
         assert call_kwargs[0][0] == "https://hooks.test.com/alert"
-        # Check payload
         payload = call_kwargs[1]["json"]
         assert payload["system"] == "QuantumFence"
         assert payload["event"] == "security_alert"
@@ -126,7 +106,6 @@ class TestWebhookSending:
             "services.notification_service.aiohttp.ClientSession",
             return_value=mock_session,
         ):
-            # Should log error but not re-raise
             await svc._send_webhooks(
                 "person_detected", "medium", "Test", "Desc", "Cam", None, None
             )
@@ -165,9 +144,6 @@ class TestWebhookSending:
         mock_cls.assert_not_called()
 
 
-# ─── notify_alert dispatcher ─────────────────────────────────────────────────
-
-
 class TestNotifyAlertDispatcher:
 
     @pytest.mark.asyncio
@@ -204,7 +180,6 @@ class TestNotifyAlertDispatcher:
 
     @pytest.mark.asyncio
     async def test_no_tasks_when_no_webhooks_and_email_disabled(self, svc):
-        # No webhooks registered + email disabled → no network calls at all
         svc._send_webhooks = AsyncMock()
         svc._send_email_alert = AsyncMock()
 
@@ -232,14 +207,7 @@ class TestNotifyAlertDispatcher:
         assert call_kwargs["ai_summary"] == "Likely surveillance drone"
 
 
-# ─── HTML email template ─────────────────────────────────────────────────────
-
-
 class TestEmailHTMLTemplate:
-    """
-    We can't send real email, but we can verify the HTML template
-    is built correctly by inspecting the generated MIME message.
-    """
 
     @pytest.mark.asyncio
     async def test_email_html_contains_alert_title(self, svc_email_enabled):
@@ -270,7 +238,6 @@ class TestEmailHTMLTemplate:
         html_content = {}
 
         async def mock_send(msg, **kwargs):
-            # Extract HTML part
             for part in msg.walk():
                 if part.get_content_type() == "text/html":
                     html_content["body"] = part.get_payload()
@@ -291,7 +258,6 @@ class TestEmailHTMLTemplate:
         import base64
 
         raw_body = html_content.get("body", "")
-        # email.mime may return base64-encoded payload - decode if needed
         try:
             body = base64.b64decode(raw_body).decode("utf-8")
         except Exception:
@@ -304,7 +270,6 @@ class TestEmailHTMLTemplate:
             "services.notification_service.aiosmtplib.send",
             side_effect=Exception("SMTP error"),
         ):
-            # Should log and swallow the exception
             await svc_email_enabled._send_email_alert(
                 "person_detected", "high", "T", "D", "Cam", None, None, None, None
             )

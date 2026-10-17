@@ -1,16 +1,8 @@
-"""
-System-level integration tests: health endpoint, root endpoint,
-CORS headers, static file serving, and end-to-end alert workflow.
-"""
-
 from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.api, pytest.mark.integration]
-
-
-# ─── Root / Health endpoints ──────────────────────────────────────────────────
 
 
 class TestRootEndpoint:
@@ -57,9 +49,6 @@ class TestHealthEndpoint:
         app.state.detection_service.camera_processors = {}
 
 
-# ─── CORS ────────────────────────────────────────────────────────────────────
-
-
 class TestCORSHeaders:
 
     def test_options_request_returns_cors_headers(self, client):
@@ -70,7 +59,6 @@ class TestCORSHeaders:
                 "Access-Control-Request-Method": "GET",
             },
         )
-        # FastAPI CORSMiddleware should handle OPTIONS
         assert res.status_code in (200, 204)
 
     def test_get_request_has_cors_allow_origin(self, client, auth_headers):
@@ -78,21 +66,12 @@ class TestCORSHeaders:
             "/api/cameras",
             headers={**auth_headers, "Origin": "http://localhost:3000"},
         )
-        # The Allow-Origin header should be present
         assert "access-control-allow-origin" in {k.lower() for k in res.headers.keys()}
-
-
-# ─── Static file mount ───────────────────────────────────────────────────────
 
 
 class TestStaticFilesMount:
 
     def test_snapshots_endpoint_exists(self, client, tmp_path, monkeypatch):
-        """
-        Write a JPEG into the configured snapshots dir and verify
-        the /snapshots static mount serves it. Avoids mutating
-        app.routes (read-only property in Starlette >= 0.21).
-        """
         import os
 
         import cv2
@@ -114,18 +93,9 @@ class TestStaticFilesMount:
                 os.remove(snap_path)
 
 
-# ─── End-to-end workflow ──────────────────────────────────────────────────────
-
-
 class TestEndToEndAlertWorkflow:
-    """
-    Full workflow: create camera → verify it's listed →
-    manually create alert → acknowledge → resolve.
-    Exercises the entire API surface in sequence.
-    """
 
     def test_full_alert_lifecycle(self, client, auth_headers):
-        # 1. Create a camera
         cam_res = client.post(
             "/api/cameras",
             json={
@@ -138,24 +108,19 @@ class TestEndToEndAlertWorkflow:
         assert cam_res.status_code == 201
         cam_id = cam_res.json()["id"]
 
-        # 2. Verify camera appears in list
         list_res = client.get("/api/cameras", headers=auth_headers)
         cam_ids = [c["id"] for c in list_res.json()]
         assert cam_id in cam_ids
 
-        # 3. Verify stats show zero alerts
         stats_res = client.get(f"/api/cameras/{cam_id}/stats", headers=auth_headers)
         assert stats_res.json()["total_alerts"] == 0
 
-        # 4. Analytics overview should include the camera
         ov_res = client.get("/api/analytics/overview", headers=auth_headers)
         assert ov_res.json()["cameras"]["total"] >= 1
 
-        # 5. Delete camera
         del_res = client.delete(f"/api/cameras/{cam_id}", headers=auth_headers)
         assert del_res.status_code == 204
 
-        # 6. Camera no longer in list
         list_res2 = client.get("/api/cameras", headers=auth_headers)
         ids2 = [c["id"] for c in list_res2.json()]
         assert cam_id not in ids2
@@ -163,7 +128,6 @@ class TestEndToEndAlertWorkflow:
     def test_geofence_to_alert_workflow(
         self, client, auth_headers, make_camera, make_alert
     ):
-        # 1. Create geofence
         gf_res = client.post(
             "/api/geofences",
             json={
@@ -181,38 +145,28 @@ class TestEndToEndAlertWorkflow:
         assert gf_res.status_code == 201
         gf_id = gf_res.json()["id"]
 
-        # 2. Check a point inside
         pt_res = client.post(
             f"/api/geofences/{gf_id}/check-point?lat=33.684&lng=73.048",
             headers=auth_headers,
         )
         assert pt_res.json()["inside"] is True
 
-        # 3. Create a camera linked to the geofence
         cam = make_camera(geofence_id=gf_id)
 
-        # 4. Create an alert for that camera
         alert = make_alert(camera_id=cam.id)
 
-        # 5. Stats should reflect the alert
-        stats_res = client.get(f"/api/alerts/stats", headers=auth_headers)
+        stats_res = client.get("/api/alerts/stats", headers=auth_headers)
         assert stats_res.json()["total"] >= 1
 
-        # 6. Acknowledge
         ack_res = client.post(
             f"/api/alerts/{alert.id}/acknowledge", headers=auth_headers
         )
         assert ack_res.json()["status"] == "acknowledged"
 
-        # 7. Resolve
         res_res = client.post(f"/api/alerts/{alert.id}/resolve", headers=auth_headers)
         assert res_res.json()["status"] == "resolved"
 
-        # 8. Cleanup geofence
         client.delete(f"/api/geofences/{gf_id}", headers=auth_headers)
-
-
-# ─── Role-based access control ───────────────────────────────────────────────
 
 
 class TestRoleBasedAccess:

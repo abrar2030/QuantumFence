@@ -1,8 +1,3 @@
-"""
-Tests for /api/auth routes.
-Covers registration, login, token validation, role-based access, and refresh.
-"""
-
 from datetime import timedelta
 
 import pytest
@@ -18,9 +13,6 @@ from jose import jwt
 pytestmark = pytest.mark.api
 
 
-# ─── Password helpers ────────────────────────────────────────────────────────
-
-
 class TestPasswordHelpers:
 
     def test_hash_and_verify_correct_password(self):
@@ -32,7 +24,6 @@ class TestPasswordHelpers:
         assert verify_password("wrong", hashed) is False
 
     def test_two_hashes_of_same_password_differ(self):
-        """Bcrypt includes a random salt - hashes must be unique."""
         h1 = hash_password("same")
         h2 = hash_password("same")
         assert h1 != h2
@@ -40,9 +31,6 @@ class TestPasswordHelpers:
     def test_hash_is_not_plaintext(self):
         hashed = hash_password("plaintext")
         assert "plaintext" not in hashed
-
-
-# ─── Token creation ──────────────────────────────────────────────────────────
 
 
 class TestTokenCreation:
@@ -67,10 +55,6 @@ class TestTokenCreation:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
-        issued = payload["exp"] - payload.get(
-            "iat", payload["exp"] - settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )
-        # Generous range: exp should be ≈ 60 min from now
         import time
 
         delta = payload["exp"] - time.time()
@@ -86,10 +70,7 @@ class TestTokenCreation:
         import time
 
         delta = payload["exp"] - time.time()
-        assert 0 < delta <= 15  # 10 s + small tolerance
-
-
-# ─── Registration endpoint ────────────────────────────────────────────────────
+        assert 0 < delta <= 15
 
 
 class TestRegisterEndpoint:
@@ -134,7 +115,7 @@ class TestRegisterEndpoint:
         )
         assert res.status_code == 400
 
-    def test_register_admin_role(self, client):
+    def test_register_admin_role_requires_admin(self, client):
         res = client.post(
             "/api/auth/register",
             json={
@@ -144,11 +125,21 @@ class TestRegisterEndpoint:
                 "role": "admin",
             },
         )
+        assert res.status_code == 403
+
+    def test_admin_can_register_admin_role(self, client, auth_headers):
+        res = client.post(
+            "/api/auth/register",
+            headers=auth_headers,
+            json={
+                "username": "superadmin",
+                "email": "sa@qf.local",
+                "password": "pass1234",
+                "role": "admin",
+            },
+        )
         assert res.status_code == 201
         assert res.json()["role"] == "admin"
-
-
-# ─── Login endpoint ───────────────────────────────────────────────────────────
 
 
 class TestLoginEndpoint:
@@ -207,9 +198,6 @@ class TestLoginEndpoint:
         assert res.status_code == 400
 
 
-# ─── /me endpoint ────────────────────────────────────────────────────────────
-
-
 class TestMeEndpoint:
 
     def test_me_returns_current_user(self, client, auth_headers, admin_user):
@@ -228,9 +216,6 @@ class TestMeEndpoint:
         assert res.status_code == 401
 
 
-# ─── Token refresh ────────────────────────────────────────────────────────────
-
-
 class TestTokenRefresh:
 
     def test_refresh_with_valid_refresh_token(self, client, make_user):
@@ -244,6 +229,5 @@ class TestTokenRefresh:
         assert "access_token" in res.json()
 
     def test_refresh_with_access_token_fails(self, client, admin_token):
-        """Providing an access token as refresh token must be rejected."""
         res = client.post(f"/api/auth/refresh?refresh_token={admin_token}")
         assert res.status_code == 401

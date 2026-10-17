@@ -9,14 +9,14 @@ const FEATURES = [
     text: "Onboard unlimited IP, RTSP, USB, and HTTP-MJPEG cameras with live WebSocket status and PTZ control.",
   },
   {
-    icon: "⚡",
+    icon: "◈",
     title: "AI Detection (YOLOv8)",
     text: "Real-time person, vehicle, and drone detection with multi-object tracking and swarm recognition.",
   },
   {
     icon: "◆",
     title: "Claude AI Threat Analysis",
-    text: "Natural-language threat summaries, 0.0–1.0 risk scoring, and recommended operator actions.",
+    text: "Natural-language threat summaries, 0.0-1.0 risk scoring, and recommended operator actions.",
   },
   {
     icon: "⊕",
@@ -113,7 +113,7 @@ function NavBar() {
               boxShadow: "0 0 16px var(--qf-cyan-dim)",
             }}
           >
-            ⚡
+            ◈
           </div>
           <span
             style={{

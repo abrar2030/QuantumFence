@@ -219,7 +219,7 @@ export default function Alerts() {
                       fontFamily: "var(--font-mono)",
                     }}
                   >
-                    ✓ NO ALERTS FOUND
+                    NO ALERTS FOUND
                   </td>
                 </tr>
               ) : (
@@ -258,7 +258,7 @@ export default function Alerts() {
                             lineHeight: 1.4,
                           }}
                         >
-                          🤖 {a.ai_summary.slice(0, 100)}
+                          AI: {a.ai_summary.slice(0, 100)}
                           {a.ai_summary.length > 100 ? "…" : ""}
                         </div>
                       )}
@@ -270,7 +270,7 @@ export default function Alerts() {
                             marginTop: 3,
                           }}
                         >
-                          ⚡ {a.recommended_action.slice(0, 80)}
+                          {a.recommended_action.slice(0, 80)}
                           {a.recommended_action.length > 80 ? "…" : ""}
                         </div>
                       )}

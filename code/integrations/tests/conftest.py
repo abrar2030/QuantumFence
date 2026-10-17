@@ -1,21 +1,10 @@
-"""
-QuantumFence - Integrations Test Configuration
-Located at: code/integrations/tests/conftest.py
-
-Path resolution:
-  - code/integrations/tests/ → this file
-  - code/integrations/       → parent, contains google_earth.py
-  - code/                    → grandparent
-  - code/backend/            → for config.settings
-"""
-
 import os
 import sys
 
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))  # code/integrations/tests
-_INTEG_DIR = os.path.dirname(_THIS_DIR)  # code/integrations
-_CODE_DIR = os.path.dirname(_INTEG_DIR)  # code
-_BACKEND_DIR = os.path.join(_CODE_DIR, "backend")  # code/backend
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_INTEG_DIR = os.path.dirname(_THIS_DIR)
+_CODE_DIR = os.path.dirname(_INTEG_DIR)
+_BACKEND_DIR = os.path.join(_CODE_DIR, "backend")
 
 for _p in (_INTEG_DIR, _CODE_DIR, _BACKEND_DIR):
     if _p not in sys.path:

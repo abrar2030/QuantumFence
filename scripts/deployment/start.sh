@@ -5,9 +5,9 @@ CYAN='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC
 QF_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 log()    { echo -e "${CYAN}[QF]${NC} $*"; }
-success(){ echo -e "${GREEN}[✓]${NC} $*"; }
+success(){ echo -e "${GREEN}[ok]${NC} $*"; }
 warn()   { echo -e "${YELLOW}[!]${NC} $*"; }
-error()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
+error()  { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 cleanup() {
     echo ""
@@ -20,7 +20,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo -e "${CYAN}"
-echo "  ⚡ QUANTUMFENCE - Launching Systems..."
+echo "  QUANTUMFENCE - Launching Systems..."
 echo -e "${NC}"
 
 # ── Backend ────────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ success "Frontend PID: $FRONTEND_PID"
 
 echo ""
 echo -e "${GREEN}══════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  ⚡ QuantumFence is running!${NC}"
+echo -e "${GREEN}  QuantumFence is running!${NC}"
 echo -e "${GREEN}══════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Frontend  → ${CYAN}http://localhost:3000${NC}"

@@ -104,7 +104,7 @@ function CameraModal({ camera, onClose, onSave }) {
               fontSize: 20,
             }}
           >
-            ✕
+            ×
           </button>
         </div>
 
@@ -302,7 +302,7 @@ function CameraModal({ camera, onClose, onSave }) {
               color: "var(--qf-red)",
             }}
           >
-            ⚠ {error}
+            {error}
           </div>
         )}
 
@@ -398,7 +398,7 @@ function StatsModal({ camera, onClose }) {
               fontSize: 18,
             }}
           >
-            ✕
+            ×
           </button>
         </div>
 
@@ -685,7 +685,7 @@ function CameraCard({ camera, onEdit, onDelete, onToggle, onStats }) {
             borderRadius: 6,
           }}
         >
-          📍 {camera.latitude.toFixed(4)}, {camera.longitude.toFixed(4)}
+          {camera.latitude.toFixed(4)}, {camera.longitude.toFixed(4)}
         </div>
       )}
 
@@ -733,7 +733,7 @@ function CameraCard({ camera, onEdit, onDelete, onToggle, onStats }) {
           onClick={() => onDelete(camera.id)}
           title="Delete camera"
         >
-          ✕
+          ×
         </button>
       </div>
     </div>

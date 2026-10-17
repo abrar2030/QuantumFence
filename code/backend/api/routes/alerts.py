@@ -1,7 +1,3 @@
-"""
-QuantumFence - Alert Management Routes
-"""
-
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -25,6 +21,7 @@ class AlertOut(BaseModel):
     title: str
     description: Optional[str] = None
     ai_summary: Optional[str] = None
+    detection_id: Optional[int] = None
     recommended_action: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -56,7 +53,6 @@ class AlertStats(BaseModel):
     by_type: dict
 
 
-# /stats must be declared before /{alert_id}
 @router.get("/stats", response_model=AlertStats)
 async def get_alert_stats(
     db: Session = Depends(get_db),
@@ -87,13 +83,13 @@ async def get_alert_stats(
 
 @router.get("/", response_model=List[AlertOut])
 async def list_alerts(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
     status: Optional[AlertStatus] = None,
     severity: Optional[AlertSeverity] = None,
     alert_type: Optional[AlertType] = None,
     camera_id: Optional[int] = None,
-    hours: Optional[int] = Query(None, description="Last N hours"),
+    hours: Optional[int] = Query(None, ge=1, le=24 * 365, description="Last N hours"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

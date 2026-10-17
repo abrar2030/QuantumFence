@@ -1,14 +1,3 @@
-"""
-QuantumFence - Backend Test Configuration & Shared Fixtures
-Located at: code/backend/tests/conftest.py
-
-Path resolution:
-  - This file lives in code/backend/tests/
-  - code/backend/ is its parent  → contains all backend packages
-  - code/           is grandparent → contains ai_models, integrations
-  Both are added to sys.path so every import resolves correctly.
-"""
-
 import asyncio
 import os
 import sys
@@ -16,16 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# ── Path setup ────────────────────────────────────────────────────────────────
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))  # code/backend/tests
-_BACKEND_DIR = os.path.dirname(_THIS_DIR)  # code/backend
-_CODE_DIR = os.path.dirname(_BACKEND_DIR)  # code
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_DIR = os.path.dirname(_THIS_DIR)
+_CODE_DIR = os.path.dirname(_BACKEND_DIR)
 
 for _p in (_BACKEND_DIR, _CODE_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-# ── Override env vars BEFORE importing settings ───────────────────────────────
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("ANTHROPIC_API_KEY", "")
@@ -57,10 +44,6 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# DATABASE FIXTURES
-# ═══════════════════════════════════════════════════════════════════════════════
-
 
 @pytest.fixture(scope="session")
 def test_engine():
@@ -83,7 +66,6 @@ def test_engine():
 
 @pytest.fixture(scope="function")
 def db_session(test_engine):
-    """SAVEPOINT-based isolation - every test fully rolled back."""
     conn = test_engine.connect()
     trans = conn.begin()
     nested = conn.begin_nested()
@@ -102,11 +84,6 @@ def db_session(test_engine):
     nested.rollback()
     trans.rollback()
     conn.close()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MODEL FACTORIES
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 @pytest.fixture
@@ -172,7 +149,6 @@ def make_camera(db_session):
             geofence_id=geofence_id,
             is_active=True,
         )
-        # kwargs override defaults (e.g. make_camera(fps=30))
         defaults.update(kwargs)
         cam = Camera(**defaults)
         db_session.add(cam)
@@ -276,11 +252,6 @@ def make_drone_detection(db_session, make_camera):
     return _factory
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FASTAPI TEST CLIENT
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 @pytest.fixture(scope="function")
 def client(db_session):
     from main import app
@@ -302,9 +273,6 @@ def client(db_session):
         yield c
 
     app.dependency_overrides.clear()
-
-
-# ── Auth helpers ──────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -347,9 +315,6 @@ def operator_headers(operator_token):
     return {"Authorization": f"Bearer {operator_token}"}
 
 
-# ── Frame fixtures ────────────────────────────────────────────────────────────
-
-
 @pytest.fixture
 def blank_frame():
     import numpy as np
@@ -363,9 +328,6 @@ def noise_frame():
 
     rng = np.random.default_rng(seed=42)
     return (rng.random((720, 1280, 3)) * 255).astype(np.uint8)
-
-
-# ── Event loop ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="session")

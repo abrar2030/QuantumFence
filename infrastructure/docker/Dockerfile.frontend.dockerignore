@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+code
+docs
+scripts
+README.md
+frontend/node_modules
+frontend/dist
+**/.env

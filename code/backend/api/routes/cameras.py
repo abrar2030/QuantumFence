@@ -1,7 +1,3 @@
-"""
-QuantumFence - Camera Management Routes
-"""
-
 import os
 from datetime import datetime
 from pathlib import Path
@@ -19,15 +15,31 @@ from database.models import (
     CameraType,
     Detection,
 )
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from services.detection_service import camera_runtime_config
 from sqlalchemy.orm import Session
 
 router = APIRouter()
 
+ALLOWED_STREAM_SCHEMES = ("rtsp://", "rtsps://", "rtmp://", "http://", "https://")
 
-# ─── Schemas ─────────────────────────────────────────────────────────────────
+
+def validate_stream_url(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    cleaned = value.strip()
+    if cleaned in ("", "simulated"):
+        return cleaned
+    if not cleaned.lower().startswith(ALLOWED_STREAM_SCHEMES):
+        raise ValueError(
+            "stream_url must be 'simulated' or use one of: "
+            + ", ".join(ALLOWED_STREAM_SCHEMES)
+        )
+    return cleaned
+
+
 class CameraCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -50,6 +62,8 @@ class CameraCreate(BaseModel):
     ptz_enabled: bool = False
     geofence_id: Optional[int] = None
 
+    _check_stream_url = field_validator("stream_url")(validate_stream_url)
+
 
 class CameraUpdate(BaseModel):
     name: Optional[str] = None
@@ -68,6 +82,8 @@ class CameraUpdate(BaseModel):
     night_vision: Optional[bool] = None
     ptz_enabled: Optional[bool] = None
     geofence_id: Optional[int] = None
+
+    _check_stream_url = field_validator("stream_url")(validate_stream_url)
 
 
 class CameraOut(BaseModel):
@@ -99,16 +115,14 @@ class CameraOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
 def _get_detection_service(request: Request):
     return getattr(request.app.state, "detection_service", None)
 
 
-# ─── Routes ──────────────────────────────────────────────────────────────────
 @router.get("/", response_model=List[CameraOut])
 async def list_cameras(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     status: Optional[CameraStatus] = None,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
@@ -138,16 +152,11 @@ async def create_camera(
 
     ds = _get_detection_service(request)
     if ds and camera.is_active:
-        config = {
-            "detect_persons": camera.detect_persons,
-            "detect_vehicles": camera.detect_vehicles,
-            "detect_drones": camera.detect_drones,
-        }
         background_tasks.add_task(
             ds.start_camera,
             camera.id,
             camera.stream_url or "simulated",
-            config,
+            camera_runtime_config(camera),
         )
 
     background_tasks.add_task(
@@ -173,6 +182,8 @@ async def get_camera(
 async def update_camera(
     camera_id: int,
     camera_data: CameraUpdate,
+    background_tasks: BackgroundTasks,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -183,6 +194,15 @@ async def update_camera(
         setattr(cam, field, value)
     db.commit()
     db.refresh(cam)
+
+    ds = _get_detection_service(request)
+    if ds and cam.is_active:
+        background_tasks.add_task(
+            ds.reconfigure_camera,
+            cam.id,
+            cam.stream_url or "simulated",
+            camera_runtime_config(cam),
+        )
     return cam
 
 
@@ -198,7 +218,6 @@ async def delete_camera(
     if not cam:
         raise HTTPException(404, "Camera not found")
 
-    # stop_camera is async, so schedule it as a background task
     ds = _get_detection_service(request)
     if ds:
         background_tasks.add_task(ds.stop_camera, camera_id)
@@ -226,13 +245,11 @@ async def enable_camera(
 
     ds = _get_detection_service(request)
     if ds:
-        config = {
-            "detect_persons": cam.detect_persons,
-            "detect_vehicles": cam.detect_vehicles,
-            "detect_drones": cam.detect_drones,
-        }
         background_tasks.add_task(
-            ds.start_camera, cam.id, cam.stream_url or "simulated", config
+            ds.start_camera,
+            cam.id,
+            cam.stream_url or "simulated",
+            camera_runtime_config(cam),
         )
     background_tasks.add_task(
         manager.broadcast_camera_status, str(camera_id), "initializing"
@@ -271,7 +288,6 @@ async def get_camera_snapshot(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the latest snapshot JPEG for a camera."""
     cam = db.query(Camera).filter(Camera.id == camera_id).first()
     if not cam:
         raise HTTPException(404, "Camera not found")

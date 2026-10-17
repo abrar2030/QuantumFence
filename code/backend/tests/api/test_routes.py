@@ -1,18 +1,9 @@
-"""
-Tests for /api/alerts, /api/drones, /api/analytics, /api/geofences routes.
-"""
-
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from database.models import AlertSeverity, AlertStatus, ThreatLevel
 
 pytestmark = pytest.mark.api
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ALERTS
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 class TestAlertStats:
@@ -66,9 +57,7 @@ class TestListAlerts:
         assert all(a["severity"] == "critical" for a in res.json())
 
     def test_filter_by_hours(self, client, auth_headers, make_alert, db_session):
-        """Alerts older than the hours window must be excluded."""
         old_alert = make_alert(title="Old")
-        # Back-date it
         old_alert.created_at = datetime.now(timezone.utc) - timedelta(hours=50)
         db_session.commit()
         make_alert(title="Recent")
@@ -172,11 +161,6 @@ class TestDeleteAlert:
         assert res.status_code == 404
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# DRONES
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 class TestDroneRoutes:
 
     def test_list_drones_empty(self, client, auth_headers):
@@ -226,11 +210,6 @@ class TestDroneRoutes:
     def test_drones_require_auth(self, client):
         res = client.get("/api/drones")
         assert res.status_code == 401
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ANALYTICS
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 class TestAnalyticsRoutes:
@@ -300,11 +279,6 @@ class TestAnalyticsRoutes:
         assert res.status_code == 401
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# GEOFENCES
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 class TestGeofenceRoutes:
 
     POLYGON = [
@@ -364,12 +338,8 @@ class TestGeofenceRoutes:
         assert res.status_code == 204
 
     def test_check_point_inside_geofence(self, client, auth_headers, make_geofence):
-        """
-        Polygon spans lng 73.046–73.050, lat 33.682–33.686.
-        The centre point should be inside.
-        """
         gf = make_geofence(coordinates=self.POLYGON)
-        lat, lng = 33.684, 73.048  # inside
+        lat, lng = 33.684, 73.048
         res = client.post(
             f"/api/geofences/{gf.id}/check-point?lat={lat}&lng={lng}",
             headers=auth_headers,
@@ -379,7 +349,7 @@ class TestGeofenceRoutes:
 
     def test_check_point_outside_geofence(self, client, auth_headers, make_geofence):
         gf = make_geofence(coordinates=self.POLYGON)
-        lat, lng = 33.700, 73.100  # clearly outside
+        lat, lng = 33.700, 73.100
         res = client.post(
             f"/api/geofences/{gf.id}/check-point?lat={lat}&lng={lng}",
             headers=auth_headers,

@@ -6,7 +6,7 @@ import { useWebSocket } from "../context/WebSocketContext";
 const NAV = [
   { path: "/dashboard", icon: "⬡", label: "DASHBOARD" },
   { path: "/cameras", icon: "◉", label: "CAMERAS" },
-  { path: "/alerts", icon: "⚠", label: "ALERTS" },
+  { path: "/alerts", icon: "▲", label: "ALERTS" },
   { path: "/drones", icon: "◈", label: "DRONE WATCH" },
   { path: "/map", icon: "⊕", label: "MAP VIEW" },
   { path: "/geofences", icon: "▲", label: "GEOFENCES" },
@@ -105,7 +105,7 @@ export default function Layout({ children }) {
                 boxShadow: "0 0 16px var(--qf-cyan-dim)",
               }}
             >
-              ⚡
+              ◈
             </div>
             <div>
               <div

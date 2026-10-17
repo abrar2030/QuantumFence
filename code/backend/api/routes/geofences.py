@@ -1,7 +1,3 @@
-"""
-QuantumFence - Geofence Management Routes
-"""
-
 import math
 from datetime import datetime
 from typing import List, Optional
@@ -19,7 +15,7 @@ router = APIRouter()
 class GeofenceCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    coordinates: list  # [[lng, lat], ...] GeoJSON convention
+    coordinates: list
     fence_type: str = "polygon"
     center_lat: Optional[float] = None
     center_lng: Optional[float] = None
@@ -134,7 +130,6 @@ async def check_point_in_geofence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Check whether a (lat, lng) point is inside the geofence polygon."""
     gf = db.query(Geofence).filter(Geofence.id == geofence_id).first()
     if not gf:
         raise HTTPException(404, "Geofence not found")
@@ -149,15 +144,7 @@ async def check_point_in_geofence(
     return {"inside": inside, "geofence_id": geofence_id, "lat": lat, "lng": lng}
 
 
-# ─── Geometry helpers (GeoJSON [lng, lat] convention) ────────────────────────
-
-
 def _point_in_polygon(lat: float, lng: float, coords: list) -> bool:
-    """
-    Ray-casting algorithm.
-    coords = [[lng0,lat0], [lng1,lat1], ...]  (GeoJSON)
-    test point = (lat, lng)
-    """
     if not coords or len(coords) < 3:
         return False
     x, y = lng, lat
