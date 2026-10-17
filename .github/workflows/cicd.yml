@@ -180,10 +180,10 @@ jobs:
           docker rm -f qf-backend-smoke || true
 
   # ============================================================
-  # Job 4 -- Web Frontend Test & Build
+  # Job 4 -- Frontend Build
   # ============================================================
   frontend_build:
-    name: Build
+    name: Frontend Build
     runs-on: ubuntu-latest
     needs: code_quality
 
